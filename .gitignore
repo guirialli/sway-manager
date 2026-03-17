@@ -1,0 +1,6 @@
+venv
+__pycache__
+out
+build
+sway-manager.spec
+nuitka-crash-report.xml
