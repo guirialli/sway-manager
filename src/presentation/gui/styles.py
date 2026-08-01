@@ -56,8 +56,40 @@ LIGHT_COLORS = {
 }
 
 
+from PySide6.QtGui import QPalette, QColor
+
+
 def get_colors(mode: str = "dark") -> dict:
     return DARK_COLORS if mode.lower() == "dark" else LIGHT_COLORS
+
+
+def get_palette(mode: str = "dark") -> QPalette:
+    c = get_colors(mode)
+    palette = QPalette()
+    bg_color = QColor(c["window_bg"])
+    card_bg = QColor(c["card_bg"])
+    input_bg = QColor(c["input_bg"])
+    text_primary = QColor(c["text_primary"])
+    text_secondary = QColor(c["text_secondary"])
+    accent = QColor(c["accent"])
+    accent_text = QColor(c["accent_text"])
+
+    palette.setColor(QPalette.Window, bg_color)
+    palette.setColor(QPalette.WindowText, text_primary)
+    palette.setColor(QPalette.Base, input_bg)
+    palette.setColor(QPalette.AlternateBase, card_bg)
+    palette.setColor(QPalette.ToolTipBase, card_bg)
+    palette.setColor(QPalette.ToolTipText, text_primary)
+    palette.setColor(QPalette.Text, text_primary)
+    palette.setColor(QPalette.PlaceholderText, text_secondary)
+    palette.setColor(QPalette.Button, card_bg)
+    palette.setColor(QPalette.ButtonText, text_primary)
+    palette.setColor(QPalette.Highlight, accent)
+    palette.setColor(QPalette.HighlightedText, accent_text)
+    palette.setColor(QPalette.BrightText, accent_text)
+
+    return palette
+
 
 
 def get_stylesheet(mode: str = "dark") -> str:
@@ -147,6 +179,82 @@ def get_stylesheet(mode: str = "dark") -> str:
 
         QLineEdit:focus {{
             border: 1.5px solid {c['accent']};
+        }}
+
+        /* QComboBox Styling */
+        QComboBox {{
+            background-color: {c['input_bg']};
+            border: 1px solid {c['input_border']};
+            border-radius: 6px;
+            padding: 6px 10px;
+            color: {c['text_primary']};
+            font-size: 13px;
+            min-height: 20px;
+            selection-background-color: {c['accent']};
+            selection-color: {c['accent_text']};
+        }}
+
+        QComboBox:hover {{
+            border-color: {c['accent']};
+        }}
+
+        QComboBox:on, QComboBox:focus {{
+            border-color: {c['accent']};
+            background-color: {c['input_bg']};
+            color: {c['text_primary']};
+        }}
+
+        QComboBox QLineEdit {{
+            background-color: transparent;
+            border: none;
+            color: {c['text_primary']};
+            font-size: 13px;
+            selection-background-color: {c['accent']};
+            selection-color: {c['accent_text']};
+        }}
+
+        QComboBox::drop-down {{
+            subcontrol-origin: padding;
+            subcontrol-position: top right;
+            width: 24px;
+            border-left: none;
+            border-top-right-radius: 6px;
+            border-bottom-right-radius: 6px;
+        }}
+
+        /* QComboBox Popup Dropdown List */
+        QComboBox QAbstractItemView, QComboBox QListView {{
+            background-color: {c['card_bg']};
+            border: 1px solid {c['card_border']};
+            border-radius: 8px;
+            padding: 4px;
+            color: {c['text_primary']};
+            selection-background-color: {c['accent']};
+            selection-color: {c['accent_text']};
+            outline: none;
+        }}
+
+        QComboBox QAbstractItemView::viewport, QComboBox QListView::viewport {{
+            background-color: {c['card_bg']};
+            color: {c['text_primary']};
+        }}
+
+        QComboBox QAbstractItemView::item, QComboBox QListView::item {{
+            min-height: 26px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            color: {c['text_primary']};
+            background-color: {c['card_bg']};
+        }}
+
+        QComboBox QAbstractItemView::item:hover, QComboBox QListView::item:hover {{
+            background-color: {c['button_hover']};
+            color: {c['text_primary']};
+        }}
+
+        QComboBox QAbstractItemView::item:selected, QComboBox QListView::item:selected {{
+            background-color: {c['accent']};
+            color: {c['accent_text']};
         }}
 
         /* Checkbox & Switch */

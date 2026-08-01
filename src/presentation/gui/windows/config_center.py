@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QLineEdit,
     QCheckBox,
+    QComboBox,
+    QListView,
     QFormLayout,
     QScrollArea,
     QStackedWidget,
@@ -21,6 +23,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QPixmap, QImage, QIcon
 import presentation.gui.styles as styles
 from presentation.gui.components.image_list import CarregadorDeImagens, ListaImagens
+from presentation.gui.components.styled_combo_box import ThemeComboBox
 from utils.string import StringUtils
 
 # Domain & Application imports
@@ -37,7 +40,8 @@ from application.power.toggle_power_profile_use_case import TogglePowerProfileUs
 from application.theme.toggle_theme_use_case import ToggleThemeUseCase
 from application.theme.set_wallpaper_use_case import SetWallpaperUseCase
 from application.theme.update_lightdm_use_case import UpdateLightDMUseCase
-from domain.theme.entities import LightDMSettings
+from application.theme.manage_appearance_use_case import ManageAppearanceUseCase
+from domain.theme.entities import LightDMSettings, AppearanceSettings
 
 
 class ConfigCenterWindow(QWidget):
@@ -52,7 +56,9 @@ class ConfigCenterWindow(QWidget):
         self.battery_use_case = ToggleBatteryConservationUseCase(SysfsBatteryRepository())
         self.idle_use_case = ToggleIdleUseCase(SwayIdleRepository())
         self.power_use_case = TogglePowerProfileUseCase(PowerProfilesRepository())
-        self.theme_use_case = ToggleThemeUseCase(GtkQtThemeRepository())
+        self.theme_repo = GtkQtThemeRepository()
+        self.theme_use_case = ToggleThemeUseCase(self.theme_repo)
+        self.appearance_use_case = ManageAppearanceUseCase(self.theme_repo)
         self.wallpaper_use_case = SetWallpaperUseCase(SwayWallpaperRepository())
         self.lightdm_use_case = UpdateLightDMUseCase(LightDMRepository())
 
@@ -300,6 +306,53 @@ class ConfigCenterWindow(QWidget):
         card_layout.addLayout(theme_row)
         layout.addWidget(card)
 
+        # Card 2: GTK, Icons, Cursors & Fonts Customization
+        card_app, app_layout = self.create_card(
+            "Personalização de Aparência (GTK, Ícones, Cursor e Fonte)",
+            "Selecione o tema GTK, tema de ícones, tema do cursor e fonte do sistema entre as opções instaladas."
+        )
+
+        form_layout = QFormLayout()
+        form_layout.setSpacing(12)
+
+        options = self.appearance_use_case.get_available_options()
+        current_settings = self.appearance_use_case.get_settings()
+
+        # ComboBox Tema GTK
+        self.combo_gtk_theme = ThemeComboBox(options.gtk_themes, current_settings.gtk_theme)
+
+        # ComboBox Tema de Ícones
+        self.combo_icon_theme = ThemeComboBox(options.icon_themes, current_settings.icon_theme)
+
+        # ComboBox Tema do Cursor
+        self.combo_cursor_theme = ThemeComboBox(options.cursor_themes, current_settings.cursor_theme)
+
+        # ComboBox Fonte do Sistema
+        self.combo_font = ThemeComboBox(options.fonts, current_settings.font_name)
+
+        form_layout.addRow(QLabel("Tema GTK:"), self.combo_gtk_theme)
+        form_layout.addRow(QLabel("Tema de Ícones:"), self.combo_icon_theme)
+        form_layout.addRow(QLabel("Tema do Cursor:"), self.combo_cursor_theme)
+        form_layout.addRow(QLabel("Fonte do Sistema:"), self.combo_font)
+
+        app_layout.addLayout(form_layout)
+
+        # Action row for applying appearance settings
+        app_action_row = QHBoxLayout()
+        self.lbl_appearance_status = QLabel("")
+        self.lbl_appearance_status.setStyleSheet("font-size: 13px; font-weight: 600; color: #34C759;")
+
+        btn_apply_appearance = QPushButton("✨ Aplicar Aparência")
+        btn_apply_appearance.setProperty("class", "primaryButton")
+        btn_apply_appearance.clicked.connect(self.aplicar_config_aparencia)
+
+        app_action_row.addWidget(self.lbl_appearance_status)
+        app_action_row.addStretch()
+        app_action_row.addWidget(btn_apply_appearance)
+
+        app_layout.addLayout(app_action_row)
+        layout.addWidget(card_app)
+
         layout.addStretch()
         container.setLayout(layout)
         scroll.setWidget(container)
@@ -310,6 +363,20 @@ class ConfigCenterWindow(QWidget):
         current_mode = self.theme_use_case.get_state().current_theme
         self.lbl_current_theme.setText(f"Tema Atual: {current_mode.upper()}")
         self.apply_theme_styles()
+
+    def aplicar_config_aparencia(self):
+        new_settings = AppearanceSettings(
+            gtk_theme=self.combo_gtk_theme.currentText(),
+            icon_theme=self.combo_icon_theme.currentText(),
+            cursor_theme=self.combo_cursor_theme.currentText(),
+            font_name=self.combo_font.currentText(),
+        )
+        success = self.appearance_use_case.apply(new_settings)
+        if success:
+            self.lbl_appearance_status.setText("✅ Aparência atualizada com sucesso!")
+        else:
+            self.lbl_appearance_status.setText("❌ Erro ao aplicar configurações de aparência.")
+
 
     # ---------------------------------------------------------
     # Page 3: Bateria & Energia
@@ -450,15 +517,40 @@ class ConfigCenterWindow(QWidget):
         layout.addWidget(card_bg)
 
         # Card 2: Greeter Styles Form
-        card_style, style_layout = self.create_card("Estilo e Aparência do Greeter")
+        card_style, style_layout = self.create_card(
+            "Estilo e Aparência do Greeter",
+            "Configure o tema GTK, tema de ícones, cursor e fonte para a tela de login do LightDM."
+        )
 
         form_layout = QFormLayout()
         form_layout.setSpacing(12)
 
-        self.txt_gtk_theme = QLineEdit(self.lightdm_settings.get("theme-name", "Adwaita-dark"))
-        self.txt_icon_theme = QLineEdit(self.lightdm_settings.get("icon-theme-name", "Adwaita"))
-        self.txt_cursor_theme = QLineEdit(self.lightdm_settings.get("cursor-theme-name", "Bibata-Modern-Ice"))
-        self.txt_font_name = QLineEdit(self.lightdm_settings.get("font-name", "Sans 11"))
+        options = self.appearance_use_case.get_available_options()
+
+        self.txt_gtk_theme = ThemeComboBox(
+            options.gtk_themes,
+            self.lightdm_settings.get("theme-name", "Adwaita-dark"),
+            editable=False,
+        )
+
+        self.txt_icon_theme = ThemeComboBox(
+            options.icon_themes,
+            self.lightdm_settings.get("icon-theme-name", "Adwaita"),
+            editable=False,
+        )
+
+        self.txt_cursor_theme = ThemeComboBox(
+            options.cursor_themes,
+            self.lightdm_settings.get("cursor-theme-name", "Bibata-Modern-Ice"),
+            editable=False,
+        )
+
+        self.txt_font_name = ThemeComboBox(
+            options.fonts,
+            self.lightdm_settings.get("font-name", "Sans 11"),
+            editable=False,
+        )
+
         self.txt_clock_format = QLineEdit(self.lightdm_settings.get("clock-format", "%a, %d %b %H:%M"))
 
         form_layout.addRow(QLabel("Tema GTK:"), self.txt_gtk_theme)
@@ -468,6 +560,15 @@ class ConfigCenterWindow(QWidget):
         form_layout.addRow(QLabel("Formato do Relógio:"), self.txt_clock_format)
 
         style_layout.addLayout(form_layout)
+
+        # Sync button row
+        sync_row = QHBoxLayout()
+        btn_sync_appearance = QPushButton("✨ Sincronizar Aparência do Sistema")
+        btn_sync_appearance.clicked.connect(self.sincronizar_aparencia_lightdm)
+        sync_row.addStretch()
+        sync_row.addWidget(btn_sync_appearance)
+        style_layout.addLayout(sync_row)
+
         layout.addWidget(card_style)
 
         # Card 3: Checkbox Options
@@ -535,12 +636,25 @@ class ConfigCenterWindow(QWidget):
         else:
             self.lbl_lightdm_status.setText("⚠️ Nenhum wallpaper atual do Sway foi encontrado.")
 
+    def sincronizar_aparencia_lightdm(self):
+        curr = self.appearance_use_case.get_settings()
+        if curr.gtk_theme:
+            self.txt_gtk_theme.setCurrentText(curr.gtk_theme)
+        if curr.icon_theme:
+            self.txt_icon_theme.setCurrentText(curr.icon_theme)
+        if curr.cursor_theme:
+            self.txt_cursor_theme.setCurrentText(curr.cursor_theme)
+        if curr.font_name:
+            self.txt_font_name.setCurrentText(curr.font_name)
+
+        self.lbl_lightdm_status.setText("✨ Tema, ícones, cursor e fonte do sistema sincronizados no formulário!")
+
     def salvar_config_lightdm(self):
         dict_settings = {
-            "theme-name": self.txt_gtk_theme.text().strip(),
-            "icon-theme-name": self.txt_icon_theme.text().strip(),
-            "cursor-theme-name": self.txt_cursor_theme.text().strip(),
-            "font-name": self.txt_font_name.text().strip(),
+            "theme-name": self.txt_gtk_theme.currentText().strip(),
+            "icon-theme-name": self.txt_icon_theme.currentText().strip(),
+            "cursor-theme-name": self.txt_cursor_theme.currentText().strip(),
+            "font-name": self.txt_font_name.currentText().strip(),
             "clock-format": self.txt_clock_format.text().strip(),
             "draw-user-backgrounds": "true" if self.chk_user_bg.isChecked() else "false",
             "hide-user-image": "true" if self.chk_hide_user_img.isChecked() else "false",
@@ -564,7 +678,12 @@ class ConfigCenterWindow(QWidget):
     def apply_theme_styles(self):
         current_mode = self.theme_use_case.get_state().current_theme
         c = styles.get_colors(current_mode)
-        
+        palette = styles.get_palette(current_mode)
+
+        if QApplication.instance():
+            QApplication.instance().setPalette(palette)
+        self.setPalette(palette)
+
         base_qss = styles.get_stylesheet(current_mode)
 
         custom_qss = f"""
