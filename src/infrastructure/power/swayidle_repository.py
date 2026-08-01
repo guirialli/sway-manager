@@ -3,12 +3,20 @@ import subprocess
 from typing import Optional
 from domain.power.entities import IdleState
 from domain.power.repositories import IIdleRepository
+from domain.notification.entities import Notification
+from domain.notification.repositories import INotificationRepository
+from infrastructure.notification.desktop_notification_repository import (
+    DesktopNotificationRepository,
+)
 
 
 class SwayIdleRepository(IIdleRepository):
     STATE_FILE = os.path.expanduser("~/.cache/swayidle_enabled")
     TIMEOUT_LOCK = 180  # 3 minutes
     TIMEOUT_SLEEP = 300  # 5 minutes
+
+    def __init__(self, notification_repo: Optional[INotificationRepository] = None):
+        self.notification_repo = notification_repo or DesktopNotificationRepository()
 
     def _is_running(self) -> bool:
         res = subprocess.run(
@@ -60,5 +68,5 @@ class SwayIdleRepository(IIdleRepository):
             msg = "Suspensão ativada!"
 
         if flag != "-s":
-            subprocess.run(["notify-send", msg])
+            self.notification_repo.notify(Notification(title=msg))
         return msg

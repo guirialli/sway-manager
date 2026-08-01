@@ -1,5 +1,6 @@
 import os
 import subprocess
+import datetime
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtWidgets import (
     QApplication,
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QFrame,
     QFileDialog,
+    QSpinBox,
 )
 from PySide6.QtGui import QPixmap, QImage, QIcon
 import presentation.gui.styles as styles
@@ -41,6 +43,8 @@ from application.theme.toggle_theme_use_case import ToggleThemeUseCase
 from application.theme.set_wallpaper_use_case import SetWallpaperUseCase
 from application.theme.update_lightdm_use_case import UpdateLightDMUseCase
 from application.theme.manage_appearance_use_case import ManageAppearanceUseCase
+from application.notification.send_notification_use_case import SendNotificationUseCase
+from infrastructure.notification.desktop_notification_repository import DesktopNotificationRepository
 from domain.theme.entities import LightDMSettings, AppearanceSettings
 
 
@@ -61,6 +65,7 @@ class ConfigCenterWindow(QWidget):
         self.appearance_use_case = ManageAppearanceUseCase(self.theme_repo)
         self.wallpaper_use_case = SetWallpaperUseCase(SwayWallpaperRepository())
         self.lightdm_use_case = UpdateLightDMUseCase(LightDMRepository())
+        self.notification_use_case = SendNotificationUseCase(DesktopNotificationRepository())
 
         self.pasta_imagens = os.path.expanduser("~/Imagens/Wallpapers")
         if not os.path.exists(self.pasta_imagens):
@@ -253,8 +258,9 @@ class ConfigCenterWindow(QWidget):
 
         try:
             self.wallpaper_use_case.execute(caminho_imagem)
-            subprocess.run(
-                ["notify-send", "Papel de Parede", f"Aplicado: {os.path.basename(caminho_imagem)}"]
+            self.notification_use_case.execute(
+                title="Papel de Parede",
+                message=f"Aplicado: {os.path.basename(caminho_imagem)}",
             )
         except Exception as e:
             print(f"Erro ao aplicar wallpaper: {e}")
@@ -491,7 +497,82 @@ class ConfigCenterWindow(QWidget):
         self.lightdm_settings = self.lightdm_use_case.get_settings().to_dict()
         self.selected_lightdm_bg = None
 
+        available_users = self.lightdm_use_case.get_available_users()
+        available_sessions = self.lightdm_use_case.get_available_sessions()
+        options = self.appearance_use_case.get_available_options()
+
+        # ---------------------------------------------------------
+        # Card 0: Live Greeter Preview
+        # ---------------------------------------------------------
+        card_preview, preview_card_layout = self.create_card("Pré-visualização ao Vivo do Greeter")
+        
+        self.preview_frame = QFrame()
+        self.preview_frame.setFixedHeight(160)
+        self.preview_frame.setStyleSheet(
+            "QFrame { background-color: #1e1e2e; border-radius: 8px; border: 1px solid #313244; }"
+        )
+        
+        preview_box_layout = QVBoxLayout(self.preview_frame)
+        preview_box_layout.setContentsMargins(16, 12, 16, 12)
+
+        # Top bar of preview
+        top_bar = QHBoxLayout()
+        lbl_host = QLabel("🖥️ sway-desktop")
+        lbl_host.setStyleSheet("font-size: 11px; color: #a6adc8; font-weight: 600;")
+        self.lbl_preview_clock = QLabel("")
+        self.lbl_preview_clock.setStyleSheet("font-size: 12px; color: #cdd6f4; font-weight: 700;")
+        
+        top_bar.addWidget(lbl_host)
+        top_bar.addStretch()
+        top_bar.addWidget(self.lbl_preview_clock)
+        preview_box_layout.addLayout(top_bar)
+        preview_box_layout.addStretch()
+
+        # Center login box of preview
+        center_login = QHBoxLayout()
+        center_card = QFrame()
+        center_card.setFixedWidth(260)
+        center_card.setStyleSheet(
+            "QFrame { background: rgba(30, 30, 46, 0.85); border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); }"
+        )
+        center_layout = QVBoxLayout(center_card)
+        center_layout.setContentsMargins(12, 10, 12, 10)
+        center_layout.setSpacing(6)
+
+        avatar_row = QHBoxLayout()
+        lbl_avatar = QLabel("👤")
+        lbl_avatar.setStyleSheet("font-size: 22px; background: transparent;")
+        
+        user_name_text = self.lightdm_settings.get("autologin-user") or (available_users[0] if available_users else "Usuario")
+        self.lbl_preview_username = QLabel(user_name_text)
+        self.lbl_preview_username.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
+        
+        avatar_row.addWidget(lbl_avatar)
+        avatar_row.addWidget(self.lbl_preview_username)
+        avatar_row.addStretch()
+        center_layout.addLayout(avatar_row)
+
+        lbl_pass_sim = QLabel("••••••••••••")
+        lbl_pass_sim.setStyleSheet("background: rgba(0,0,0,0.3); color: #888; border-radius: 4px; padding: 4px; font-size: 10px;")
+        center_layout.addWidget(lbl_pass_sim)
+
+        self.lbl_preview_session = QLabel(f"Sessão: {self.lightdm_settings.get('user-session', 'sway')}")
+        self.lbl_preview_session.setStyleSheet("font-size: 10px; color: #a6adc8;")
+        center_layout.addWidget(self.lbl_preview_session)
+
+        center_login.addStretch()
+        center_login.addWidget(center_card)
+        center_login.addStretch()
+
+        preview_box_layout.addLayout(center_login)
+        preview_box_layout.addStretch()
+
+        preview_card_layout.addWidget(self.preview_frame)
+        layout.addWidget(card_preview)
+
+        # ---------------------------------------------------------
         # Card 1: Background
+        # ---------------------------------------------------------
         card_bg, bg_layout = self.create_card("Plano de Fundo da Tela de Login")
 
         bg_actual = self.lightdm_settings.get("background", "Nenhum")
@@ -516,16 +597,77 @@ class ConfigCenterWindow(QWidget):
         bg_layout.addLayout(bg_btn_layout)
         layout.addWidget(card_bg)
 
-        # Card 2: Greeter Styles Form
+        # ---------------------------------------------------------
+        # Card 2: Daemon & Autologin Settings (lightdm.conf)
+        # ---------------------------------------------------------
+        card_daemon, daemon_layout = self.create_card(
+            "Login Automático & Sessão do Sistema (lightdm.conf)",
+            "Configurações gerais do servidor LightDM, autologin e permissões de sessão."
+        )
+        daemon_form = QFormLayout()
+        daemon_form.setSpacing(10)
+
+        # Autologin toggle
+        self.chk_autologin_enable = QCheckBox("Ativar Login Automático sem pedir Senha")
+        curr_autologin_user = self.lightdm_settings.get("autologin-user", "")
+        self.chk_autologin_enable.setChecked(bool(curr_autologin_user))
+
+        # Autologin user dropdown
+        self.cmb_autologin_user = ThemeComboBox(available_users, curr_autologin_user or (available_users[0] if available_users else ""), editable=False)
+        self.cmb_autologin_user.setEnabled(bool(curr_autologin_user))
+        self.chk_autologin_enable.toggled.connect(self.cmb_autologin_user.setEnabled)
+        self.cmb_autologin_user.currentTextChanged.connect(self.update_lightdm_preview)
+
+        # Autologin timeout spinbox
+        self.spn_autologin_timeout = QSpinBox()
+        self.spn_autologin_timeout.setRange(0, 300)
+        self.spn_autologin_timeout.setSuffix(" seg")
+        try:
+            self.spn_autologin_timeout.setValue(int(self.lightdm_settings.get("autologin-user-timeout", "0")))
+        except ValueError:
+            self.spn_autologin_timeout.setValue(0)
+
+        # Autologin session dropdown
+        curr_autologin_sess = self.lightdm_settings.get("autologin-session", "sway")
+        self.cmb_autologin_session = ThemeComboBox(available_sessions, curr_autologin_sess, editable=False)
+
+        # User session dropdown
+        curr_user_sess = self.lightdm_settings.get("user-session", "sway")
+        self.cmb_user_session = ThemeComboBox(available_sessions, curr_user_sess, editable=False)
+        self.cmb_user_session.currentTextChanged.connect(self.update_lightdm_preview)
+
+        daemon_form.addRow(self.chk_autologin_enable)
+        daemon_form.addRow(QLabel("Usuário do Autologin:"), self.cmb_autologin_user)
+        daemon_form.addRow(QLabel("Tempo de Espera Autologin:"), self.spn_autologin_timeout)
+        daemon_form.addRow(QLabel("Sessão do Autologin:"), self.cmb_autologin_session)
+        daemon_form.addRow(QLabel("Sessão Padrão do Usuário:"), self.cmb_user_session)
+
+        # Additional daemon checkboxes
+        self.chk_manual_login = QCheckBox("Permitir digitação manual de nome de usuário (greeter-show-manual-login)")
+        self.chk_manual_login.setChecked(self.lightdm_settings.get("greeter-show-manual-login", "false").lower() == "true")
+
+        self.chk_hide_user_list = QCheckBox("Ocultar lista de usuários no login (greeter-hide-users)")
+        self.chk_hide_user_list.setChecked(self.lightdm_settings.get("greeter-hide-users", "false").lower() == "true")
+
+        self.chk_allow_guest = QCheckBox("Permitir conta de convidado / Guest (allow-guest)")
+        self.chk_allow_guest.setChecked(self.lightdm_settings.get("allow-guest", "false").lower() == "true")
+
+        daemon_layout.addLayout(daemon_form)
+        daemon_layout.addWidget(self.chk_manual_login)
+        daemon_layout.addWidget(self.chk_hide_user_list)
+        daemon_layout.addWidget(self.chk_allow_guest)
+        layout.addWidget(card_daemon)
+
+        # ---------------------------------------------------------
+        # Card 3: Greeter Styles Form (lightdm-gtk-greeter.conf)
+        # ---------------------------------------------------------
         card_style, style_layout = self.create_card(
-            "Estilo e Aparência do Greeter",
-            "Configure o tema GTK, tema de ícones, cursor e fonte para a tela de login do LightDM."
+            "Estilo e Aparência do Greeter (lightdm-gtk-greeter.conf)",
+            "Configure o tema GTK, tema de ícones, cursor, fonte e renderização Xft."
         )
 
         form_layout = QFormLayout()
-        form_layout.setSpacing(12)
-
-        options = self.appearance_use_case.get_available_options()
+        form_layout.setSpacing(10)
 
         self.txt_gtk_theme = ThemeComboBox(
             options.gtk_themes,
@@ -545,25 +687,55 @@ class ConfigCenterWindow(QWidget):
             editable=False,
         )
 
+        cursor_sizes = ["16", "24", "32", "48"]
+        self.txt_cursor_size = ThemeComboBox(
+            cursor_sizes,
+            self.lightdm_settings.get("cursor-theme-size", "24"),
+            editable=False,
+        )
+
         self.txt_font_name = ThemeComboBox(
             options.fonts,
             self.lightdm_settings.get("font-name", "Sans 11"),
             editable=False,
         )
 
-        self.txt_clock_format = QLineEdit(self.lightdm_settings.get("clock-format", "%a, %d %b %H:%M"))
+        # Xft options
+        self.chk_xft_antialias = QCheckBox("Ativar Suavização de Fontes (xft-antialias)")
+        self.chk_xft_antialias.setChecked(self.lightdm_settings.get("xft-antialias", "true").lower() == "true")
+
+        self.txt_xft_dpi = QLineEdit(self.lightdm_settings.get("xft-dpi", ""))
+        self.txt_xft_dpi.setPlaceholderText("Padrão do Sistema (ex: 96)")
+
+        hint_styles = ["hintslight", "hintnone", "hintmedium", "hintfull"]
+        self.cmb_xft_hintstyle = ThemeComboBox(
+            hint_styles,
+            self.lightdm_settings.get("xft-hintstyle", "hintslight"),
+            editable=False,
+        )
+
+        rgba_styles = ["rgb", "none", "bgr", "vrgb", "vbgr"]
+        self.cmb_xft_rgba = ThemeComboBox(
+            rgba_styles,
+            self.lightdm_settings.get("xft-rgba", "rgb"),
+            editable=False,
+        )
 
         form_layout.addRow(QLabel("Tema GTK:"), self.txt_gtk_theme)
         form_layout.addRow(QLabel("Tema de Ícones:"), self.txt_icon_theme)
         form_layout.addRow(QLabel("Tema do Cursor:"), self.txt_cursor_theme)
+        form_layout.addRow(QLabel("Tamanho do Cursor:"), self.txt_cursor_size)
         form_layout.addRow(QLabel("Fonte:"), self.txt_font_name)
-        form_layout.addRow(QLabel("Formato do Relógio:"), self.txt_clock_format)
+        form_layout.addRow(self.chk_xft_antialias)
+        form_layout.addRow(QLabel("Resolução DPI (Xft):"), self.txt_xft_dpi)
+        form_layout.addRow(QLabel("Estilo de Hinting (Xft):"), self.cmb_xft_hintstyle)
+        form_layout.addRow(QLabel("Renderização Subpixel (RGBA):"), self.cmb_xft_rgba)
 
         style_layout.addLayout(form_layout)
 
         # Sync button row
         sync_row = QHBoxLayout()
-        btn_sync_appearance = QPushButton("✨ Sincronizar Aparência do Sistema")
+        btn_sync_appearance = QPushButton("✨ Sincronizar Aparência com Sway/Sistema")
         btn_sync_appearance.clicked.connect(self.sincronizar_aparencia_lightdm)
         sync_row.addStretch()
         sync_row.addWidget(btn_sync_appearance)
@@ -571,29 +743,84 @@ class ConfigCenterWindow(QWidget):
 
         layout.addWidget(card_style)
 
-        # Card 3: Checkbox Options
-        card_opt, opt_layout = self.create_card("Opções Adicionais de Login")
+        # ---------------------------------------------------------
+        # Card 4: Clock, Layout & Indicators
+        # ---------------------------------------------------------
+        card_layout_opt, layout_opt_layout = self.create_card("Relógio, Posição e Indicadores do Painel")
+
+        form_clock = QFormLayout()
+        form_clock.setSpacing(10)
+
+        self.txt_clock_format = QLineEdit(self.lightdm_settings.get("clock-format", "%a, %d %b %H:%M"))
+        self.txt_clock_format.textChanged.connect(self.update_lightdm_preview)
+
+        positions = ["50%,center", "50%,50%", "30%,50%", "70%,50%", "50%,30%", "50%,70%"]
+        self.cmb_position = ThemeComboBox(
+            positions,
+            self.lightdm_settings.get("position", "50%,center"),
+            editable=True,
+        )
+
+        self.txt_active_monitor = QLineEdit(self.lightdm_settings.get("active-monitor", "#cursor"))
+
+        self.spn_screensaver_timeout = QSpinBox()
+        self.spn_screensaver_timeout.setRange(0, 3600)
+        self.spn_screensaver_timeout.setSuffix(" seg")
+        try:
+            self.spn_screensaver_timeout.setValue(int(self.lightdm_settings.get("screensaver-timeout", "60")))
+        except ValueError:
+            self.spn_screensaver_timeout.setValue(60)
+
+        self.txt_indicators = QLineEdit(self.lightdm_settings.get("indicators", "~host;~spacer;~clock;~spacer;~session;~language;~a11y;~power"))
+
+        form_clock.addRow(QLabel("Formato do Relógio:"), self.txt_clock_format)
+        form_clock.addRow(QLabel("Posição da Janela de Login:"), self.cmb_position)
+        form_clock.addRow(QLabel("Monitor Ativo:"), self.txt_active_monitor)
+        form_clock.addRow(QLabel("Timeout de Descanso de Tela:"), self.spn_screensaver_timeout)
+        form_clock.addRow(QLabel("Indicadores do Painel Superior:"), self.txt_indicators)
+
+        layout_opt_layout.addLayout(form_clock)
+        layout.addWidget(card_layout_opt)
+
+        # ---------------------------------------------------------
+        # Card 5: Display & Avatar Options
+        # ---------------------------------------------------------
+        card_opt, opt_layout = self.create_card("Opções de Exibição de Fundo e Avatares")
 
         self.chk_user_bg = QCheckBox("Carregar wallpaper individual do usuário (draw-user-backgrounds)")
         self.chk_user_bg.setChecked(self.lightdm_settings.get("draw-user-backgrounds", "false").lower() == "true")
 
+        self.chk_draw_grid = QCheckBox("Desenhar grade sobreposta no plano de fundo (draw-grid)")
+        self.chk_draw_grid.setChecked(self.lightdm_settings.get("draw-grid", "false").lower() == "true")
+
         self.chk_hide_user_img = QCheckBox("Ocultar foto do usuário na tela de login (hide-user-image)")
         self.chk_hide_user_img.setChecked(self.lightdm_settings.get("hide-user-image", "false").lower() == "true")
 
+        opt_form = QFormLayout()
+        self.txt_default_user_image = QLineEdit(self.lightdm_settings.get("default-user-image", ""))
+        self.txt_default_user_image.setPlaceholderText("Caminho para avatar padrão (ex: /usr/share/pixmaps/avatar.png)")
+        btn_pick_avatar = QPushButton("📁 Escolher")
+        btn_pick_avatar.clicked.connect(self.selecionar_avatar_padrao_lightdm)
+        
+        avatar_row = QHBoxLayout()
+        avatar_row.addWidget(self.txt_default_user_image)
+        avatar_row.addWidget(btn_pick_avatar)
+        opt_form.addRow(QLabel("Avatar Padrão do Usuário:"), avatar_row)
+
         opt_layout.addWidget(self.chk_user_bg)
+        opt_layout.addWidget(self.chk_draw_grid)
         opt_layout.addWidget(self.chk_hide_user_img)
+        opt_layout.addLayout(opt_form)
         layout.addWidget(card_opt)
 
+        # ---------------------------------------------------------
         # Action Bar at bottom
+        # ---------------------------------------------------------
         action_layout = QHBoxLayout()
-        self.lbl_lightdm_status = QLabel("")
-        self.lbl_lightdm_status.setStyleSheet("font-size: 13px; font-weight: 600; color: #34C759;")
-
         btn_save_lightdm = QPushButton("💾 Salvar Configurações no LightDM")
         btn_save_lightdm.setProperty("class", "primaryButton")
         btn_save_lightdm.clicked.connect(self.salvar_config_lightdm)
 
-        action_layout.addWidget(self.lbl_lightdm_status)
         action_layout.addStretch()
         action_layout.addWidget(btn_save_lightdm)
         layout.addLayout(action_layout)
@@ -601,7 +828,30 @@ class ConfigCenterWindow(QWidget):
         layout.addStretch()
         container.setLayout(layout)
         scroll.setWidget(container)
+
+        self.update_lightdm_preview()
         return scroll
+
+    def update_lightdm_preview(self):
+        if not hasattr(self, "lbl_preview_clock"):
+            return
+        
+        # 1. Update clock
+        fmt = self.txt_clock_format.text().strip() or "%a, %d %b %H:%M"
+        try:
+            now_str = datetime.datetime.now().strftime(fmt)
+            self.lbl_preview_clock.setText(now_str)
+        except Exception:
+            self.lbl_preview_clock.setText(datetime.datetime.now().strftime("%H:%M"))
+
+        # 2. Update Username & Session labels
+        if hasattr(self, "cmb_autologin_user") and hasattr(self, "lbl_preview_username"):
+            usr = self.cmb_autologin_user.currentText().strip() if self.chk_autologin_enable.isChecked() else "Usuario"
+            self.lbl_preview_username.setText(usr or "Usuario")
+
+        if hasattr(self, "cmb_user_session") and hasattr(self, "lbl_preview_session"):
+            sess = self.cmb_user_session.currentText().strip() or "sway"
+            self.lbl_preview_session.setText(f"Sessão: {sess}")
 
     def format_lightdm_bg_text(self, prefix: str, path: str) -> tuple[str, str]:
         if not path or path == "Nenhum":
@@ -622,6 +872,17 @@ class ConfigCenterWindow(QWidget):
             txt, tooltip = self.format_lightdm_bg_text("Selecionada", caminho)
             self.lbl_lightdm_bg.setText(txt)
             self.lbl_lightdm_bg.setToolTip(tooltip)
+            self.update_lightdm_preview()
+
+    def selecionar_avatar_padrao_lightdm(self):
+        caminho, _ = QFileDialog.getOpenFileName(
+            self,
+            "Selecionar Avatar Padrão para o LightDM",
+            self.pasta_imagens,
+            "Imagens (*.png *.jpg *.jpeg *.svg)",
+        )
+        if caminho:
+            self.txt_default_user_image.setText(caminho)
 
     def usar_wallpaper_sway_no_lightdm(self):
         target = self.wallpaper_use_case.get_current()
@@ -631,10 +892,16 @@ class ConfigCenterWindow(QWidget):
             self.lbl_lightdm_bg.setText(txt)
             self.lbl_lightdm_bg.setToolTip(tooltip)
             nome_trunc = StringUtils.truncar_nome_arquivo(os.path.basename(target), max_len=25)
-            self.lbl_lightdm_status.setText(f"✅ Wallpaper do Sway selecionado: {nome_trunc}")
-            self.lbl_lightdm_status.setToolTip(target)
+            self.notification_use_case.execute(
+                title="SwayManager LightDM",
+                message=f"Wallpaper do Sway selecionado: {nome_trunc}",
+            )
+            self.update_lightdm_preview()
         else:
-            self.lbl_lightdm_status.setText("⚠️ Nenhum wallpaper atual do Sway foi encontrado.")
+            self.notification_use_case.execute(
+                title="SwayManager LightDM",
+                message="Nenhum wallpaper atual do Sway foi encontrado.",
+            )
 
     def sincronizar_aparencia_lightdm(self):
         curr = self.appearance_use_case.get_settings()
@@ -647,33 +914,81 @@ class ConfigCenterWindow(QWidget):
         if curr.font_name:
             self.txt_font_name.setCurrentText(curr.font_name)
 
-        self.lbl_lightdm_status.setText("✨ Tema, ícones, cursor e fonte do sistema sincronizados no formulário!")
+        # Sync Sway wallpaper as well
+        target_wp = self.wallpaper_use_case.get_current()
+        if target_wp:
+            self.selected_lightdm_bg = target_wp
+            txt, tooltip = self.format_lightdm_bg_text("Selecionada (Sway)", target_wp)
+            self.lbl_lightdm_bg.setText(txt)
+            self.lbl_lightdm_bg.setToolTip(tooltip)
+
+        self.update_lightdm_preview()
+        self.notification_use_case.execute(
+            title="SwayManager LightDM",
+            message="Tema, ícones, cursor, fonte e wallpaper do Sway sincronizados no formulário!",
+        )
 
     def salvar_config_lightdm(self):
+        autologin_user = self.cmb_autologin_user.currentText().strip() if self.chk_autologin_enable.isChecked() else ""
+
         dict_settings = {
+            # Greeter - Aparência
             "theme-name": self.txt_gtk_theme.currentText().strip(),
             "icon-theme-name": self.txt_icon_theme.currentText().strip(),
             "cursor-theme-name": self.txt_cursor_theme.currentText().strip(),
+            "cursor-theme-size": self.txt_cursor_size.currentText().strip(),
             "font-name": self.txt_font_name.currentText().strip(),
+            "xft-antialias": "true" if self.chk_xft_antialias.isChecked() else "false",
+            "xft-dpi": self.txt_xft_dpi.text().strip(),
+            "xft-hintstyle": self.cmb_xft_hintstyle.currentText().strip(),
+            "xft-rgba": self.cmb_xft_rgba.currentText().strip(),
+
+            # Greeter - Layout, Relógio e Indicadores
             "clock-format": self.txt_clock_format.text().strip(),
+            "position": self.cmb_position.currentText().strip(),
+            "active-monitor": self.txt_active_monitor.text().strip(),
+            "screensaver-timeout": str(self.spn_screensaver_timeout.value()),
+            "indicators": self.txt_indicators.text().strip(),
+
+            # Greeter - Exibição e Usuários
             "draw-user-backgrounds": "true" if self.chk_user_bg.isChecked() else "false",
+            "draw-grid": "true" if self.chk_draw_grid.isChecked() else "false",
             "hide-user-image": "true" if self.chk_hide_user_img.isChecked() else "false",
+            "default-user-image": self.txt_default_user_image.text().strip(),
+
+            # Daemon / Seat - Autologin & Sessão
+            "autologin-user": autologin_user,
+            "autologin-user-timeout": str(self.spn_autologin_timeout.value()),
+            "autologin-session": self.cmb_autologin_session.currentText().strip(),
+            "user-session": self.cmb_user_session.currentText().strip(),
+            "greeter-show-manual-login": "true" if self.chk_manual_login.isChecked() else "false",
+            "greeter-hide-users": "true" if self.chk_hide_user_list.isChecked() else "false",
+            "allow-guest": "true" if self.chk_allow_guest.isChecked() else "false",
         }
+
         if not self.selected_lightdm_bg:
             dict_settings["background"] = self.lightdm_settings.get("background", "/etc/lightdm/background.jpg")
 
         new_settings = LightDMSettings.from_dict(dict_settings)
         success = self.lightdm_use_case.execute(new_settings, self.selected_lightdm_bg)
         if success:
-            self.lbl_lightdm_status.setText("✅ Configurações salvas no LightDM com sucesso!")
+            self.notification_use_case.execute(
+                title="SwayManager LightDM",
+                message="Configurações salvas no LightDM com sucesso!",
+            )
             self.lightdm_settings = self.lightdm_use_case.get_settings().to_dict()
             bg_path = self.lightdm_settings.get("background", "Nenhum")
             txt, tooltip = self.format_lightdm_bg_text("Imagem Atual", bg_path)
             self.lbl_lightdm_bg.setText(txt)
             self.lbl_lightdm_bg.setToolTip(tooltip)
             self.selected_lightdm_bg = None
+            self.update_lightdm_preview()
         else:
-            self.lbl_lightdm_status.setText("❌ Erro ao salvar (operação cancelada ou falha).")
+            self.notification_use_case.execute(
+                title="SwayManager LightDM",
+                message="Erro ao salvar (operação cancelada ou falha).",
+                urgency="critical",
+            )
 
     def apply_theme_styles(self):
         current_mode = self.theme_use_case.get_state().current_theme

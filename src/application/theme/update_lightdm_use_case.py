@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from domain.theme.repositories import ILightDMRepository
 from domain.theme.entities import LightDMSettings
 
@@ -14,3 +14,9 @@ class UpdateLightDMUseCase:
         self, settings: LightDMSettings, image_source_path: Optional[str] = None
     ) -> bool:
         return self.repository.save_settings(settings, image_source_path)
+
+    def get_available_users(self) -> List[str]:
+        return self.repository.get_available_users()
+
+    def get_available_sessions(self) -> List[str]:
+        return self.repository.get_available_sessions()

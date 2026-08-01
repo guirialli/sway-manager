@@ -1,11 +1,20 @@
 import os
 import datetime
 import subprocess
+from typing import Optional
 from domain.media.value_objects import ScreenshotMode
 from domain.media.repositories import IScreenshotRepository
+from domain.notification.entities import Notification
+from domain.notification.repositories import INotificationRepository
+from infrastructure.notification.desktop_notification_repository import (
+    DesktopNotificationRepository,
+)
 
 
 class GrimSlurpScreenshotRepository(IScreenshotRepository):
+    def __init__(self, notification_repo: Optional[INotificationRepository] = None):
+        self.notification_repo = notification_repo or DesktopNotificationRepository()
+
     def take_screenshot(self, mode: ScreenshotMode) -> None:
         try:
             res = subprocess.run(
@@ -37,8 +46,8 @@ class GrimSlurpScreenshotRepository(IScreenshotRepository):
 
         if res.returncode == 0 and os.path.isfile(filename):
             subprocess.run(f"wl-copy < '{filename}'", shell=True)
-            subprocess.run(
-                ["notify-send", f"Captura {action_desc} salva em {filename}"]
+            self.notification_repo.notify(
+                Notification(title=f"Captura {action_desc} salva em {filename}")
             )
             print(f"Screenshot saved to {filename}")
         else:

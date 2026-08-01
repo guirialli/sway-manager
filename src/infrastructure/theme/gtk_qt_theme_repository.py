@@ -2,12 +2,18 @@ import os
 import shutil
 import subprocess
 import configparser
+from typing import Optional
 from domain.theme.entities import (
     ThemeState,
     AppearanceSettings,
     AvailableAppearanceOptions,
 )
 from domain.theme.repositories import IThemeRepository
+from domain.notification.entities import Notification
+from domain.notification.repositories import INotificationRepository
+from infrastructure.notification.desktop_notification_repository import (
+    DesktopNotificationRepository,
+)
 
 
 class GtkQtThemeRepository(IThemeRepository):
@@ -15,6 +21,10 @@ class GtkQtThemeRepository(IThemeRepository):
     FILE = os.path.join(WORK_PATH, "theme")
     FOOT_DIR = os.path.expanduser("~/.config/foot")
     FOOT_FILE = os.path.join(FOOT_DIR, "foot.ini")
+
+    def __init__(self, notification_repo: Optional[INotificationRepository] = None):
+        self.notification_repo = notification_repo or DesktopNotificationRepository()
+
 
     def get_state(self) -> ThemeState:
         if os.path.isfile(self.FILE):
@@ -67,7 +77,7 @@ class GtkQtThemeRepository(IThemeRepository):
             f.write(new_theme)
 
         msg = f"Trocando para o tema {new_theme}"
-        subprocess.run(["notify-send", msg])
+        self.notification_repo.notify(Notification(title=msg))
         return msg
 
     def get_appearance_settings(self) -> AppearanceSettings:
@@ -125,7 +135,12 @@ class GtkQtThemeRepository(IThemeRepository):
             if settings.cursor_theme:
                 self._update_cursor_index_theme(settings.cursor_theme)
 
-            subprocess.run(["notify-send", "SwayManager", f"Aparência aplicada!\nTema: {settings.gtk_theme}"])
+            self.notification_repo.notify(
+                Notification(
+                    title="SwayManager",
+                    message=f"Aparência aplicada!\nTema: {settings.gtk_theme}",
+                )
+            )
             return True
         except Exception as e:
             print(f"Error applying appearance settings: {e}")

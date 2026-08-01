@@ -3,9 +3,17 @@ import subprocess
 from typing import Optional
 from domain.power.entities import BatteryState
 from domain.power.repositories import IBatteryRepository
+from domain.notification.entities import Notification
+from domain.notification.repositories import INotificationRepository
+from infrastructure.notification.desktop_notification_repository import (
+    DesktopNotificationRepository,
+)
 
 
 class SysfsBatteryRepository(IBatteryRepository):
+    def __init__(self, notification_repo: Optional[INotificationRepository] = None):
+        self.notification_repo = notification_repo or DesktopNotificationRepository()
+
     def _find_control_file(self) -> Optional[str]:
         paths = [
             "/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/conservation_mode",
@@ -57,8 +65,8 @@ class SysfsBatteryRepository(IBatteryRepository):
         control_file = self._find_control_file()
         if not control_file:
             msg = "Conservação não suportada neste hardware."
-            subprocess.run(
-                ["notify-send", "-u", "critical", "Bateria", msg]
+            self.notification_repo.notify(
+                Notification(title="Bateria", message=msg, urgency="critical")
             )
             return False, "ERROR: Arquivo de controle não encontrado."
 
@@ -91,5 +99,7 @@ class SysfsBatteryRepository(IBatteryRepository):
             else:
                 subprocess.run(["sudo", "sh", "-c", cmd])
 
-        subprocess.run(["notify-send", "-u", "normal", "Bateria", msg])
+        self.notification_repo.notify(
+            Notification(title="Bateria", message=msg, urgency="normal")
+        )
         return True, msg

@@ -49,3 +49,12 @@ class ILightDMRepository(ABC):
     @abstractmethod
     def save_settings(self, settings: LightDMSettings, image_source_path: Optional[str] = None) -> bool:
         pass
+
+    @abstractmethod
+    def get_available_users(self) -> list[str]:
+        pass
+
+    @abstractmethod
+    def get_available_sessions(self) -> list[str]:
+        pass
+
