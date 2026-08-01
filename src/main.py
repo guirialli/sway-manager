@@ -27,7 +27,7 @@ Comandos Disponíveis:
   osd volume [up|down|mute] Ajusta o volume e exibe o OSD gráfico.
   battery [toggle|status]  Alterna a conservação de bateria (~80% vs 100%) ou retorna o status (Waybar JSON).
   idle [toggle|status] [flag] Alterna o inibidor de suspensão swayidle (-s/-n/-r) ou retorna o status (Waybar JSON).
-  theme [toggle|status]    Alterna o tema (Dark/Light) do GTK e Foot ou retorna o status (Waybar JSON).
+  theme [toggle|status]    Alterna o tema (Dark/Light) do GTK, Qt e Foot ou retorna o status (Waybar JSON).
   power [toggle|status] [flag] Alterna o perfil de energia (-p/-b/-s) ou retorna o status (Waybar JSON).
   screenshot [full|area|window] Tira uma captura de tela e copia para a área de transferência.
   -h, --help               Exibe esta mensagem de ajuda.

@@ -7,6 +7,7 @@
 ## 🌟 Key Features
 
 ### 🖥️ Graphical Popups (Qt / PySide6)
+- **Control Center (`SwayManager settings`)**: Configurator panel with tabs for wallpapers, appearance (GTK & Qt dark/light), power/battery modes, idle inhibitors, and **LightDM greeter settings** (login wallpaper, GTK/icon themes, fonts, clock format).
 - **Monitor Display Switcher (`SwayManager monitor`)**: Multi-monitor configuration dialog to arrange, mirror, or disable displays.
 - **Wallpaper Picker (`SwayManager wallpaper [folder]`)**: Visual grid picker dialog to preview and apply wallpapers via `swaybg`.
 - **Volume OSD (`SwayManager osd volume [up|down|mute]`)**: Animated volume OSD overlay.
@@ -15,7 +16,7 @@
 ### ⚙️ CLI Services & Waybar Integrations
 - **Battery Conservation (`SwayManager battery [toggle|status]`)**: Toggles battery charge thresholds (~80% limit vs 100% full charge) across Lenovo IdeaPad and generic Linux sysfs attributes.
 - **Idle Inhibitor (`SwayManager idle [toggle|status]`)**: Manages `swayidle` sleep and lock daemon states.
-- **Theme Switcher (`SwayManager theme [toggle|status]`)**: Toggles GTK color schemes (`Adwaita` / `Adwaita-dark`) and Foot terminal color themes (`white.ini` / `black.ini`).
+- **Theme Switcher (`SwayManager theme [toggle|status]`)**: Toggles GTK color schemes (`Adwaita` / `Adwaita-dark`), Qt themes (`qt5ct`, `qt6ct`, `Kvantum`, `KDE Globals`), and Foot terminal color themes (`white.ini` / `black.ini`).
 - **Power Profiles (`SwayManager power [toggle|status]`)**: Cycles `powerprofilesctl` profiles (`power-saver`, `balanced`, `performance`).
 - **Screenshot Utility (`SwayManager screenshot [full|area|window]`)**: Captures full-screen, region, or focused window screenshots using `grim` + `slurp` and copies image data directly to clipboard.
 
@@ -32,7 +33,7 @@
 | `SwayManager osd brilho` | `up` \| `down` | Adjusts display brightness and displays OSD overlay popup. |
 | `SwayManager battery` | `toggle` \| `status` | Toggles battery conservation mode or outputs Waybar JSON status. |
 | `SwayManager idle` | `toggle [flag]` \| `status` | Toggles `swayidle` daemon or outputs Waybar JSON status. |
-| `SwayManager theme` | `toggle` \| `status` | Toggles GTK & Foot themes or outputs Waybar JSON status. |
+| `SwayManager theme` | `toggle` \| `status` | Toggles GTK, Qt & Foot themes or outputs Waybar JSON status. |
 | `SwayManager power` | `toggle [flag]` \| `status` | Cycles `powerprofilesctl` profile or outputs Waybar JSON status. |
 | `SwayManager screenshot` | `full` \| `area` \| `window` | Captures screenshot and copies image to clipboard. |
 

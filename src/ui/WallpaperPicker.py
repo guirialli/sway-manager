@@ -53,10 +53,12 @@ class WallpapaerPicker(QWidget):
 
     def aplicar_wallpaper(self, item: QListWidgetItem):
         caminho_imagem = item.data(Qt.ItemDataRole.UserRole)
-        conteudo = f'output "*" bg {caminho_imagem} fill\n'
+        if not caminho_imagem:
+            return
 
         try:
-            SwayService.escrever_arquivo(arquivo="42-wallpaper", conteudo=conteudo)
+            SwayService.set_wallpaper(caminho_imagem)
             self.close()
         except Exception as e:
             print(f"Erro ao aplicar wallpaper {e}")
+
