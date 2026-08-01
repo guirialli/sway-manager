@@ -11,10 +11,12 @@ class OSD(QWidget):
         )
 
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.resize(300, 50)
+        self.setFixedSize(300, 56)
 
         QApplication.setDesktopFileName("sway.osd.brightness")
         layout = QHBoxLayout()
+        layout.setContentsMargins(16, 10, 20, 10)
+        layout.setSpacing(12)
         self.setLayout(layout)
 
         self.setStyleSheet(f"""
@@ -24,7 +26,7 @@ class OSD(QWidget):
         """)
 
         icon_label = QLabel(label)
-        icon_label.setFixedWidth(50)
+        icon_label.setFixedWidth(40)
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(icon_label)
 
@@ -32,6 +34,7 @@ class OSD(QWidget):
         self.bar.setRange(0, 100)
         self.bar.setValue(percent)
         self.bar.setTextVisible(False)
+        self.bar.setFixedHeight(10)
         layout.addWidget(self.bar)
 
-        QTimer.singleShot(1000, QApplication.quit)
+        QTimer.singleShot(1200, QApplication.quit)

@@ -1,6 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import Optional
-from domain.theme.entities import ThemeState, LightDMSettings
+from domain.theme.entities import (
+    ThemeState,
+    LightDMSettings,
+    AppearanceSettings,
+    AvailableAppearanceOptions,
+)
 
 
 class IThemeRepository(ABC):
@@ -11,6 +16,19 @@ class IThemeRepository(ABC):
     @abstractmethod
     def toggle(self) -> str:
         pass
+
+    @abstractmethod
+    def get_appearance_settings(self) -> AppearanceSettings:
+        pass
+
+    @abstractmethod
+    def get_available_options(self) -> AvailableAppearanceOptions:
+        pass
+
+    @abstractmethod
+    def apply_appearance(self, settings: AppearanceSettings) -> bool:
+        pass
+
 
 
 class IWallpaperRepository(ABC):

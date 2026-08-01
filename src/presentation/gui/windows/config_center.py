@@ -8,19 +8,20 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QTabWidget,
-    QFileDialog,
     QListWidget,
     QListWidgetItem,
-    QGroupBox,
     QLineEdit,
     QCheckBox,
     QFormLayout,
     QScrollArea,
+    QStackedWidget,
+    QFrame,
+    QFileDialog,
 )
-from PySide6.QtGui import QIcon, QPixmap, QImage
+from PySide6.QtGui import QPixmap, QImage, QIcon
 import presentation.gui.styles as styles
 from presentation.gui.components.image_list import CarregadorDeImagens, ListaImagens
+from utils.string import StringUtils
 
 # Domain & Application imports
 from infrastructure.power.sysfs_battery_repository import SysfsBatteryRepository
@@ -44,7 +45,8 @@ class ConfigCenterWindow(QWidget):
         super().__init__()
         QApplication.setDesktopFileName("sway-manager")
         self.setWindowTitle("SwayManager Control Center")
-        self.resize(920, 640)
+        self.resize(880, 600)
+        self.setObjectName("mainWindow")
 
         # Instantiate Use Cases
         self.battery_use_case = ToggleBatteryConservationUseCase(SysfsBatteryRepository())
@@ -60,45 +62,116 @@ class ConfigCenterWindow(QWidget):
 
         self.carregador = None
         self.setup_ui()
-        self.apply_styles()
+        self.apply_theme_styles()
 
     def setup_ui(self):
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(15, 15, 15, 15)
-        main_layout.setSpacing(12)
+        root_layout = QHBoxLayout()
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
 
-        # Header Title Bar
-        header_layout = QHBoxLayout()
-        header_title = QLabel("⚙️ SwayManager Control Center")
-        header_title.setStyleSheet(
-            "font-size: 22px; font-weight: bold; color: #9d7cd8; background: transparent;"
-        )
-        header_layout.addWidget(header_title)
-        header_layout.addStretch()
+        # ---------------------------------------------------------
+        # macOS Sidebar Panel (Left Side)
+        # ---------------------------------------------------------
+        sidebar_panel = QFrame()
+        sidebar_panel.setFixedWidth(230)
+        sidebar_panel.setObjectName("sidebarPanel")
 
-        main_layout.addLayout(header_layout)
+        sidebar_layout = QVBoxLayout()
+        sidebar_layout.setContentsMargins(12, 16, 12, 16)
+        sidebar_layout.setSpacing(12)
 
-        # Tab Widget
-        self.tabs = QTabWidget()
-        self.tabs.addTab(self.create_wallpaper_tab(), "🖼️ Papel de Parede")
-        self.tabs.addTab(self.create_theme_tab(), "🌓 Aparência & Tema")
-        self.tabs.addTab(self.create_power_tab(), "🔋 Bateria & Energia")
-        self.tabs.addTab(self.create_idle_tab(), "☕ Suspensão & Idle")
-        self.tabs.addTab(self.create_lightdm_tab(), "🚦 Login & LightDM")
+        # App Header Title in Sidebar
+        header_title = QLabel("SwayManager")
+        header_title.setStyleSheet("font-size: 16px; font-weight: 700; background: transparent; padding-left: 8px;")
+        sidebar_layout.addWidget(header_title)
 
-        main_layout.addWidget(self.tabs)
-        self.setLayout(main_layout)
+        # Sidebar Menu List
+        self.sidebar_list = QListWidget()
+        self.sidebar_list.setObjectName("sidebar")
+        
+        items = [
+            ("🖼️  Papel de Parede", 0),
+            ("🌓  Aparência & Tema", 1),
+            ("🔋  Bateria & Energia", 2),
+            ("☕  Suspensão & Idle", 3),
+            ("🚦  Login & LightDM", 4),
+        ]
 
-    def create_wallpaper_tab(self) -> QWidget:
-        widget = QWidget()
+        for text, index in items:
+            item = QListWidgetItem(text)
+            item.setData(Qt.UserRole, index)
+            self.sidebar_list.addItem(item)
+
+        self.sidebar_list.currentRowChanged.connect(self.switch_page)
+        sidebar_layout.addWidget(self.sidebar_list)
+        sidebar_panel.setLayout(sidebar_layout)
+
+        root_layout.addWidget(sidebar_panel)
+
+        # ---------------------------------------------------------
+        # Content Pages Area (Right Side)
+        # ---------------------------------------------------------
+        self.stacked_widget = QStackedWidget()
+        self.stacked_widget.setObjectName("mainContainer")
+
+        self.stacked_widget.addWidget(self.create_wallpaper_page())
+        self.stacked_widget.addWidget(self.create_theme_page())
+        self.stacked_widget.addWidget(self.create_power_page())
+        self.stacked_widget.addWidget(self.create_idle_page())
+        self.stacked_widget.addWidget(self.create_lightdm_page())
+
+        root_layout.addWidget(self.stacked_widget)
+        self.setLayout(root_layout)
+
+        # Select first tab by default
+        self.sidebar_list.setCurrentRow(0)
+
+    def switch_page(self, index: int):
+        if 0 <= index < self.stacked_widget.count():
+            self.stacked_widget.setCurrentIndex(index)
+
+    def create_card(self, title: str = None, subtitle: str = None) -> tuple[QFrame, QVBoxLayout]:
+        card = QFrame()
+        card.setObjectName("appleCard")
+        card_layout = QVBoxLayout()
+        card_layout.setContentsMargins(16, 14, 16, 14)
+        card_layout.setSpacing(10)
+
+        if title:
+            lbl_title = QLabel(title)
+            lbl_title.setStyleSheet("font-size: 13px; font-weight: 600; background: transparent;")
+            card_layout.addWidget(lbl_title)
+        if subtitle:
+            lbl_sub = QLabel(subtitle)
+            lbl_sub.setStyleSheet("font-size: 12px; color: #8E8E93; background: transparent;")
+            card_layout.addWidget(lbl_sub)
+
+        card.setLayout(card_layout)
+        return card, card_layout
+
+    # ---------------------------------------------------------
+    # Page 1: Papel de Parede
+    # ---------------------------------------------------------
+    def create_wallpaper_page(self) -> QWidget:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("background: transparent; border: none;")
+
+        container = QWidget()
         layout = QVBoxLayout()
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(16)
 
-        # Top Bar: Directory display + Folder selector button
+        header = QLabel("Papel de Parede")
+        header.setStyleSheet("font-size: 20px; font-weight: 700; background: transparent;")
+        layout.addWidget(header)
+
+        # Inset Card: Folder Selection & Grid
+        card, card_layout = self.create_card("Biblioteca de Imagens")
+
         top_bar = QHBoxLayout()
         self.lbl_pasta = QLabel(f"Pasta: {self.pasta_imagens}")
-        self.lbl_pasta.setStyleSheet("font-size: 13px; color: #a9b1d6; background: transparent;")
+        self.lbl_pasta.setStyleSheet("font-size: 12px; color: #8E8E93; background: transparent;")
 
         btn_select = QPushButton("📁 Escolher Pasta")
         btn_select.clicked.connect(self.selecionar_pasta)
@@ -106,29 +179,34 @@ class ConfigCenterWindow(QWidget):
         top_bar.addWidget(self.lbl_pasta)
         top_bar.addStretch()
         top_bar.addWidget(btn_select)
-        layout.addLayout(top_bar)
+        card_layout.addLayout(top_bar)
 
         self.lista_imagens = ListaImagens(self.aplicar_wallpaper, None)
         self.lista_imagens.setViewMode(QListWidget.ViewMode.IconMode)
-        self.lista_imagens.setIconSize(QSize(240, 135))
+        self.lista_imagens.setIconSize(QSize(216, 122))
         self.lista_imagens.setResizeMode(QListWidget.ResizeMode.Adjust)
-        self.lista_imagens.setSpacing(15)
+        self.lista_imagens.setMovement(QListWidget.Movement.Static)
+        self.lista_imagens.setSpacing(12)
+        self.lista_imagens.setMinimumHeight(380)
         self.lista_imagens.itemDoubleClicked.connect(self.aplicar_wallpaper)
+        card_layout.addWidget(self.lista_imagens)
 
-        layout.addWidget(self.lista_imagens)
-
-        # Bottom Bar: Action buttons
+        # Action bar inside card
         bottom_bar = QHBoxLayout()
         btn_aplicar = QPushButton("✨ Aplicar Papel de Parede")
+        btn_aplicar.setProperty("class", "primaryButton")
         btn_aplicar.clicked.connect(self.aplicar_wallpaper_selecionado)
         bottom_bar.addStretch()
         bottom_bar.addWidget(btn_aplicar)
+        card_layout.addLayout(bottom_bar)
 
-        layout.addLayout(bottom_bar)
-        widget.setLayout(layout)
+        layout.addWidget(card)
+        layout.addStretch()
+        container.setLayout(layout)
+        scroll.setWidget(container)
 
         self.iniciar_carregador_imagens()
-        return widget
+        return scroll
 
     def selecionar_pasta(self):
         nova_pasta = QFileDialog.getExistingDirectory(
@@ -152,6 +230,11 @@ class ConfigCenterWindow(QWidget):
         item = QListWidgetItem()
         pixmap = QPixmap.fromImage(image)
         item.setIcon(QIcon(pixmap))
+        item.setSizeHint(QSize(228, 150))
+        
+        nome_completo = os.path.basename(caminho)
+        item.setToolTip(nome_completo)
+        item.setText(StringUtils.truncar_nome_arquivo(nome_completo, max_len=20))
         item.setData(Qt.ItemDataRole.UserRole, caminho)
         self.lista_imagens.addItem(item)
 
@@ -175,113 +258,181 @@ class ConfigCenterWindow(QWidget):
         if item:
             self.aplicar_wallpaper(item)
 
-    def create_theme_tab(self) -> QWidget:
-        widget = QWidget()
-        layout = QVBoxLayout()
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
-
-        group = QGroupBox("Alternar Tema GTK, Qt & Terminal")
-        group_layout = QVBoxLayout()
-
-        self.lbl_current_theme = QLabel(
-            f"Tema Atual: {self.theme_use_case.get_state().current_theme.upper()}"
-        )
-        self.lbl_current_theme.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #7aa2f7; background: transparent;"
-        )
-
-        btn_toggle_theme = QPushButton("🌓 Alternar Tema (Dark / Light)")
-        btn_toggle_theme.clicked.connect(self.toggle_theme)
-
-        group_layout.addWidget(self.lbl_current_theme)
-        group_layout.addWidget(btn_toggle_theme)
-        group.setLayout(group_layout)
-
-        layout.addWidget(group)
-        layout.addStretch()
-        widget.setLayout(layout)
-        return widget
-
-    def toggle_theme(self):
-        self.theme_use_case.execute()
-        self.lbl_current_theme.setText(
-            f"Tema Atual: {self.theme_use_case.get_state().current_theme.upper()}"
-        )
-
-    def create_power_tab(self) -> QWidget:
-        widget = QWidget()
-        layout = QVBoxLayout()
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
-
-        bat_group = QGroupBox("Modo de Conservação da Bateria (~80%)")
-        bat_layout = QVBoxLayout()
-        btn_toggle_bat = QPushButton("🔋 Alternar Limite de Carga (80% vs 100%)")
-        btn_toggle_bat.clicked.connect(lambda: self.battery_use_case.execute())
-        bat_layout.addWidget(btn_toggle_bat)
-        bat_group.setLayout(bat_layout)
-
-        profile_group = QGroupBox("Perfil de Desempenho / Energia")
-        prof_layout = QHBoxLayout()
-        btn_saver = QPushButton(" Economia")
-        btn_saver.clicked.connect(lambda: self.power_use_case.execute("-s"))
-        btn_bal = QPushButton(" Equilibrado")
-        btn_bal.clicked.connect(lambda: self.power_use_case.execute("-b"))
-        btn_perf = QPushButton(" Desempenho")
-        btn_perf.clicked.connect(lambda: self.power_use_case.execute("-p"))
-
-        prof_layout.addWidget(btn_saver)
-        prof_layout.addWidget(btn_bal)
-        prof_layout.addWidget(btn_perf)
-        profile_group.setLayout(prof_layout)
-
-        layout.addWidget(bat_group)
-        layout.addWidget(profile_group)
-        layout.addStretch()
-        widget.setLayout(layout)
-        return widget
-
-    def create_idle_tab(self) -> QWidget:
-        widget = QWidget()
-        layout = QVBoxLayout()
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
-
-        group = QGroupBox("Inibidor de Suspensão Automática (Swayidle)")
-        group_layout = QVBoxLayout()
-
-        btn_toggle_idle = QPushButton("☕ Alternar Inibidor de Suspensão (On / Off)")
-        btn_toggle_idle.clicked.connect(lambda: self.idle_use_case.execute())
-
-        group_layout.addWidget(btn_toggle_idle)
-        group.setLayout(group_layout)
-
-        layout.addWidget(group)
-        layout.addStretch()
-        widget.setLayout(layout)
-        return widget
-
-    def create_lightdm_tab(self) -> QWidget:
+    # ---------------------------------------------------------
+    # Page 2: Aparência & Tema
+    # ---------------------------------------------------------
+    def create_theme_page(self) -> QWidget:
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("background: transparent; border: none;")
 
         container = QWidget()
         layout = QVBoxLayout()
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(15)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(16)
+
+        header = QLabel("Aparência & Tema")
+        header.setStyleSheet("font-size: 20px; font-weight: 700; background: transparent;")
+        layout.addWidget(header)
+
+        # Card: System Theme Toggle
+        card, card_layout = self.create_card(
+            "Tema do Sistema (GTK, Qt & Terminal)",
+            "Alterne instantaneamente a aparência entre os modos Escuro e Claro do sistema."
+        )
+
+        theme_row = QHBoxLayout()
+        self.lbl_current_theme = QLabel(
+            f"Tema Atual: {self.theme_use_case.get_state().current_theme.upper()}"
+        )
+        self.lbl_current_theme.setStyleSheet(
+            "font-size: 14px; font-weight: 600; background: transparent;"
+        )
+
+        btn_toggle_theme = QPushButton("🌓 Alternar Tema (Dark / Light)")
+        btn_toggle_theme.setProperty("class", "primaryButton")
+        btn_toggle_theme.clicked.connect(self.toggle_theme)
+
+        theme_row.addWidget(self.lbl_current_theme)
+        theme_row.addStretch()
+        theme_row.addWidget(btn_toggle_theme)
+
+        card_layout.addLayout(theme_row)
+        layout.addWidget(card)
+
+        layout.addStretch()
+        container.setLayout(layout)
+        scroll.setWidget(container)
+        return scroll
+
+    def toggle_theme(self):
+        self.theme_use_case.execute()
+        current_mode = self.theme_use_case.get_state().current_theme
+        self.lbl_current_theme.setText(f"Tema Atual: {current_mode.upper()}")
+        self.apply_theme_styles()
+
+    # ---------------------------------------------------------
+    # Page 3: Bateria & Energia
+    # ---------------------------------------------------------
+    def create_power_page(self) -> QWidget:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("background: transparent; border: none;")
+
+        container = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(16)
+
+        header = QLabel("Bateria & Energia")
+        header.setStyleSheet("font-size: 20px; font-weight: 700; background: transparent;")
+        layout.addWidget(header)
+
+        # Card 1: Battery Limit Conservation Mode
+        card_bat, bat_layout = self.create_card(
+            "Modo de Conservação da Bateria",
+            "Limita a carga máxima em ~80% para preservar a vida útil da bateria."
+        )
+
+        bat_row = QHBoxLayout()
+        btn_toggle_bat = QPushButton("🔋 Alternar Limite de Carga (80% vs 100%)")
+        btn_toggle_bat.clicked.connect(lambda: self.battery_use_case.execute())
+        bat_row.addStretch()
+        bat_row.addWidget(btn_toggle_bat)
+        bat_layout.addLayout(bat_row)
+        layout.addWidget(card_bat)
+
+        # Card 2: Power Profiles
+        card_prof, prof_layout = self.create_card(
+            "Perfil de Desempenho",
+            "Ajuste o comportamento do processador para priorizar economia de energia ou velocidade."
+        )
+
+        btn_row = QHBoxLayout()
+        btn_saver = QPushButton("🌱 Economia")
+        btn_saver.clicked.connect(lambda: self.power_use_case.execute("-s"))
+        btn_bal = QPushButton("⚖️ Equilibrado")
+        btn_bal.clicked.connect(lambda: self.power_use_case.execute("-b"))
+        btn_perf = QPushButton("⚡ Desempenho")
+        btn_perf.clicked.connect(lambda: self.power_use_case.execute("-p"))
+
+        btn_row.addWidget(btn_saver)
+        btn_row.addWidget(btn_bal)
+        btn_row.addWidget(btn_perf)
+        prof_layout.addLayout(btn_row)
+
+        layout.addWidget(card_prof)
+
+        layout.addStretch()
+        container.setLayout(layout)
+        scroll.setWidget(container)
+        return scroll
+
+    # ---------------------------------------------------------
+    # Page 4: Suspensão & Idle
+    # ---------------------------------------------------------
+    def create_idle_page(self) -> QWidget:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("background: transparent; border: none;")
+
+        container = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(16)
+
+        header = QLabel("Suspensão & Idle")
+        header.setStyleSheet("font-size: 20px; font-weight: 700; background: transparent;")
+        layout.addWidget(header)
+
+        card, card_layout = self.create_card(
+            "Inibidor de Suspensão Automática (Swayidle)",
+            "Impede que o sistema entre em suspensão ou desligue a tela automaticamente."
+        )
+
+        idle_row = QHBoxLayout()
+        btn_toggle_idle = QPushButton("☕ Alternar Inibidor (Ativo / Inativo)")
+        btn_toggle_idle.clicked.connect(lambda: self.idle_use_case.execute())
+        idle_row.addStretch()
+        idle_row.addWidget(btn_toggle_idle)
+
+        card_layout.addLayout(idle_row)
+        layout.addWidget(card)
+
+        layout.addStretch()
+        container.setLayout(layout)
+        scroll.setWidget(container)
+        return scroll
+
+    # ---------------------------------------------------------
+    # Page 5: Login & LightDM
+    # ---------------------------------------------------------
+    def create_lightdm_page(self) -> QWidget:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("background: transparent; border: none;")
+
+        container = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(16)
+
+        header = QLabel("Login & LightDM")
+        header.setStyleSheet("font-size: 20px; font-weight: 700; background: transparent;")
+        layout.addWidget(header)
 
         self.lightdm_settings = self.lightdm_use_case.get_settings().to_dict()
         self.selected_lightdm_bg = None
 
-        bg_group = QGroupBox("🖼️ Plano de Fundo do LightDM (Login)")
-        bg_layout = QVBoxLayout()
+        # Card 1: Background
+        card_bg, bg_layout = self.create_card("Plano de Fundo da Tela de Login")
 
-        self.lbl_lightdm_bg = QLabel(
-            f"Imagem Atual: {self.lightdm_settings.get('background', 'Nenhum')}"
-        )
-        self.lbl_lightdm_bg.setStyleSheet("font-size: 13px; color: #a9b1d6;")
+        bg_actual = self.lightdm_settings.get("background", "Nenhum")
+        txt, tooltip = self.format_lightdm_bg_text("Imagem Atual", bg_actual)
+        self.lbl_lightdm_bg = QLabel(txt)
+        if tooltip:
+            self.lbl_lightdm_bg.setToolTip(tooltip)
+        self.lbl_lightdm_bg.setStyleSheet("font-size: 12px; color: #8E8E93; background: transparent;")
 
         bg_btn_layout = QHBoxLayout()
         btn_pick_bg = QPushButton("📁 Escolher Imagem")
@@ -296,12 +447,13 @@ class ConfigCenterWindow(QWidget):
 
         bg_layout.addWidget(self.lbl_lightdm_bg)
         bg_layout.addLayout(bg_btn_layout)
-        bg_group.setLayout(bg_layout)
-        layout.addWidget(bg_group)
+        layout.addWidget(card_bg)
 
-        style_group = QGroupBox("🎨 Estilo e Aparência do Greeter")
+        # Card 2: Greeter Styles Form
+        card_style, style_layout = self.create_card("Estilo e Aparência do Greeter")
+
         form_layout = QFormLayout()
-        form_layout.setSpacing(10)
+        form_layout.setSpacing(12)
 
         self.txt_gtk_theme = QLineEdit(self.lightdm_settings.get("theme-name", "Adwaita-dark"))
         self.txt_icon_theme = QLineEdit(self.lightdm_settings.get("icon-theme-name", "Adwaita"))
@@ -315,11 +467,11 @@ class ConfigCenterWindow(QWidget):
         form_layout.addRow(QLabel("Fonte:"), self.txt_font_name)
         form_layout.addRow(QLabel("Formato do Relógio:"), self.txt_clock_format)
 
-        style_group.setLayout(form_layout)
-        layout.addWidget(style_group)
+        style_layout.addLayout(form_layout)
+        layout.addWidget(card_style)
 
-        opt_group = QGroupBox("⚙️ Opções Adicionais")
-        opt_layout = QVBoxLayout()
+        # Card 3: Checkbox Options
+        card_opt, opt_layout = self.create_card("Opções Adicionais de Login")
 
         self.chk_user_bg = QCheckBox("Carregar wallpaper individual do usuário (draw-user-backgrounds)")
         self.chk_user_bg.setChecked(self.lightdm_settings.get("draw-user-backgrounds", "false").lower() == "true")
@@ -329,14 +481,15 @@ class ConfigCenterWindow(QWidget):
 
         opt_layout.addWidget(self.chk_user_bg)
         opt_layout.addWidget(self.chk_hide_user_img)
-        opt_group.setLayout(opt_layout)
-        layout.addWidget(opt_group)
+        layout.addWidget(card_opt)
 
+        # Action Bar at bottom
         action_layout = QHBoxLayout()
         self.lbl_lightdm_status = QLabel("")
-        self.lbl_lightdm_status.setStyleSheet("font-size: 13px; font-weight: bold; color: #9ecc65;")
+        self.lbl_lightdm_status.setStyleSheet("font-size: 13px; font-weight: 600; color: #34C759;")
 
         btn_save_lightdm = QPushButton("💾 Salvar Configurações no LightDM")
+        btn_save_lightdm.setProperty("class", "primaryButton")
         btn_save_lightdm.clicked.connect(self.salvar_config_lightdm)
 
         action_layout.addWidget(self.lbl_lightdm_status)
@@ -349,6 +502,13 @@ class ConfigCenterWindow(QWidget):
         scroll.setWidget(container)
         return scroll
 
+    def format_lightdm_bg_text(self, prefix: str, path: str) -> tuple[str, str]:
+        if not path or path == "Nenhum":
+            return f"{prefix}: Nenhum", ""
+        nome_arquivo = os.path.basename(path)
+        nome_truncado = StringUtils.truncar_nome_arquivo(nome_arquivo, max_len=30)
+        return f"{prefix}: {nome_truncado}", path
+
     def selecionar_imagem_lightdm(self):
         caminho, _ = QFileDialog.getOpenFileName(
             self,
@@ -358,14 +518,20 @@ class ConfigCenterWindow(QWidget):
         )
         if caminho:
             self.selected_lightdm_bg = caminho
-            self.lbl_lightdm_bg.setText(f"Selecionada: {caminho}")
+            txt, tooltip = self.format_lightdm_bg_text("Selecionada", caminho)
+            self.lbl_lightdm_bg.setText(txt)
+            self.lbl_lightdm_bg.setToolTip(tooltip)
 
     def usar_wallpaper_sway_no_lightdm(self):
         target = self.wallpaper_use_case.get_current()
         if target:
             self.selected_lightdm_bg = target
-            self.lbl_lightdm_bg.setText(f"Selecionada (Sway): {target}")
-            self.lbl_lightdm_status.setText(f"✅ Wallpaper do Sway selecionado: {os.path.basename(target)}")
+            txt, tooltip = self.format_lightdm_bg_text("Selecionada (Sway)", target)
+            self.lbl_lightdm_bg.setText(txt)
+            self.lbl_lightdm_bg.setToolTip(tooltip)
+            nome_trunc = StringUtils.truncar_nome_arquivo(os.path.basename(target), max_len=25)
+            self.lbl_lightdm_status.setText(f"✅ Wallpaper do Sway selecionado: {nome_trunc}")
+            self.lbl_lightdm_status.setToolTip(target)
         else:
             self.lbl_lightdm_status.setText("⚠️ Nenhum wallpaper atual do Sway foi encontrado.")
 
@@ -387,77 +553,44 @@ class ConfigCenterWindow(QWidget):
         if success:
             self.lbl_lightdm_status.setText("✅ Configurações salvas no LightDM com sucesso!")
             self.lightdm_settings = self.lightdm_use_case.get_settings().to_dict()
-            self.lbl_lightdm_bg.setText(f"Imagem Atual: {self.lightdm_settings.get('background', 'Nenhum')}")
+            bg_path = self.lightdm_settings.get("background", "Nenhum")
+            txt, tooltip = self.format_lightdm_bg_text("Imagem Atual", bg_path)
+            self.lbl_lightdm_bg.setText(txt)
+            self.lbl_lightdm_bg.setToolTip(tooltip)
             self.selected_lightdm_bg = None
         else:
             self.lbl_lightdm_status.setText("❌ Erro ao salvar (operação cancelada ou falha).")
 
-    def apply_styles(self):
-        self.setStyleSheet(
-            f"""
-            {styles.QWidget()}
-            {styles.QListWidget()}
-            {styles.QScrollbar()}
-            QTabWidget::pane {{
-                border: 1px solid #414868;
-                border-radius: 8px;
-                background-color: rgba(26, 27, 38, 220);
+    def apply_theme_styles(self):
+        current_mode = self.theme_use_case.get_state().current_theme
+        c = styles.get_colors(current_mode)
+        
+        base_qss = styles.get_stylesheet(current_mode)
+
+        custom_qss = f"""
+            {base_qss}
+
+            QFrame#sidebarPanel {{
+                background-color: {c['sidebar_bg']};
+                border-right: 1px solid {c['card_border']};
             }}
-            QTabBar::tab {{
-                background-color: #24283b;
-                color: #a9b1d6;
-                padding: 10px 18px;
-                margin-right: 4px;
-                border-top-left-radius: 6px;
-                border-top-right-radius: 6px;
-                font-weight: bold;
-                font-size: 14px;
+
+            QFrame#appleCard {{
+                background-color: {c['card_bg']};
+                border: 1px solid {c['card_border']};
+                border-radius: 10px;
             }}
-            QTabBar::tab:selected {{
-                background-color: #7aa2f7;
-                color: #1a1b26;
+
+            QPushButton[class="primaryButton"] {{
+                background-color: {c['accent']};
+                border: 1px solid {c['accent']};
+                color: {c['accent_text']};
+                font-weight: 600;
             }}
-            QGroupBox {{
-                border: 1px solid #414868;
-                border-radius: 8px;
-                margin-top: 15px;
-                font-weight: bold;
-                color: #7aa2f7;
-                padding: 15px;
-                background: transparent;
-            }}
-            QPushButton {{
-                background-color: #24283b;
-                border: 1px solid #414868;
-                border-radius: 6px;
-                padding: 10px 18px;
-                color: #c0caf5;
-                font-weight: bold;
-                font-size: 13px;
-            }}
-            QPushButton:hover {{
-                background-color: rgba(122, 162, 247, 0.2);
-                border-color: #7aa2f7;
-            }}
-            QLineEdit {{
-                background-color: #24283b;
-                border: 1px solid #414868;
-                border-radius: 6px;
-                padding: 8px 12px;
-                color: #c0caf5;
-                font-size: 13px;
-            }}
-            QLineEdit:focus {{
-                border-color: #7aa2f7;
-            }}
-            QCheckBox {{
-                color: #c0caf5;
-                font-size: 13px;
-                spacing: 8px;
-            }}
-            QLabel {{
-                color: #a9b1d6;
-                font-size: 13px;
+
+            QPushButton[class="primaryButton"]:hover {{
+                background-color: {c['accent_hover']};
+                border-color: {c['accent_hover']};
             }}
         """
-        )
+        self.setStyleSheet(custom_qss)

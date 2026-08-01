@@ -1,5 +1,22 @@
-from dataclasses import dataclass
-from typing import Dict, Any
+from dataclasses import dataclass, field
+from typing import Dict, Any, List
+
+
+@dataclass(frozen=True)
+class AppearanceSettings:
+    gtk_theme: str = "Adwaita"
+    icon_theme: str = "Adwaita"
+    cursor_theme: str = "Adwaita"
+    font_name: str = "Sans 10"
+
+
+@dataclass(frozen=True)
+class AvailableAppearanceOptions:
+    gtk_themes: List[str] = field(default_factory=list)
+    icon_themes: List[str] = field(default_factory=list)
+    cursor_themes: List[str] = field(default_factory=list)
+    fonts: List[str] = field(default_factory=list)
+
 
 
 @dataclass(frozen=True)
