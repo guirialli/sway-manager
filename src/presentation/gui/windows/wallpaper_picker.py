@@ -1,0 +1,65 @@
+from PySide6.QtWidgets import (
+    QWidget,
+    QApplication,
+    QVBoxLayout,
+    QListWidget,
+    QListWidgetItem,
+)
+from PySide6.QtGui import QPixmap, QImage, QIcon
+from PySide6.QtCore import QSize, Qt
+from infrastructure.theme.sway_wallpaper_repository import SwayWallpaperRepository
+from application.theme.set_wallpaper_use_case import SetWallpaperUseCase
+import presentation.gui.styles as styles
+from presentation.gui.components.image_list import CarregadorDeImagens, ListaImagens
+
+
+class WallpaperPickerWindow(QWidget):
+    def __init__(self, pasta_imagem: str):
+        super().__init__()
+        self.pasta_imagens = pasta_imagem
+        self.use_case = SetWallpaperUseCase(SwayWallpaperRepository())
+
+        self.setWindowTitle("Seletor Wallpaper")
+        self.resize(900, 600)
+
+        self.setStyleSheet(f"""
+            {styles.QWidget()}
+            {styles.QListWidget()}
+            {styles.QScrollbar()}
+        """)
+
+        QApplication.setDesktopFileName("sway.apps.wallpaper-picker")
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+
+        self.lista_imagens = ListaImagens(self.aplicar_wallpaper, lambda: self.close())
+        self.lista_imagens.setViewMode(QListWidget.ViewMode.IconMode)
+        self.lista_imagens.setIconSize(QSize(240, 135))
+        self.lista_imagens.setResizeMode(QListWidget.ResizeMode.Adjust)
+        self.lista_imagens.setSpacing(15)
+        layout.addWidget(self.lista_imagens)
+
+        self.lista_imagens.itemDoubleClicked.connect(self.aplicar_wallpaper)
+
+        self.carregador = CarregadorDeImagens(self.pasta_imagens)
+        self.carregador.imagem_carregada.connect(self.carregar_imagem)
+        self.carregador.start()
+
+    def carregar_imagem(self, caminho: str, image: QImage):
+        item = QListWidgetItem()
+        pixmap = QPixmap.fromImage(image)
+        item.setIcon(QIcon(pixmap))
+        item.setData(Qt.ItemDataRole.UserRole, caminho)
+
+        self.lista_imagens.addItem(item)
+
+    def aplicar_wallpaper(self, item: QListWidgetItem):
+        caminho_imagem = item.data(Qt.ItemDataRole.UserRole)
+        if not caminho_imagem:
+            return
+
+        try:
+            self.use_case.execute(caminho_imagem)
+            self.close()
+        except Exception as e:
+            print(f"Erro ao aplicar wallpaper {e}")
