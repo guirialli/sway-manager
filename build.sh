@@ -36,6 +36,9 @@ if ! command -v nuitka &> /dev/null; then
     pip install nuitka
 fi
 
+echo "🧪 Executando suíte de testes automatizados..."
+PYTHONPATH=src python3 -m unittest discover -s tests -v
+
 echo "🧹 Limpando pastas de build anteriores..."
 rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR"
