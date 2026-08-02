@@ -8,6 +8,7 @@ from infrastructure.display.sway_display_repository import SwayDisplayRepository
 from infrastructure.audio.mixer_audio_repository import MixerAudioRepository
 from infrastructure.power.sysfs_battery_repository import SysfsBatteryRepository
 from infrastructure.power.swayidle_repository import SwayIdleRepository
+from infrastructure.power.swaylock_repository import SwayLockRepository
 from infrastructure.power.powerprofiles_repository import PowerProfilesRepository
 from infrastructure.theme.gtk_qt_theme_repository import GtkQtThemeRepository
 from infrastructure.theme.sway_wallpaper_repository import SwayWallpaperRepository
@@ -21,6 +22,7 @@ from application.display.switch_display_mode_use_case import SwitchDisplayModeUs
 from application.audio.adjust_volume_use_case import AdjustVolumeUseCase
 from application.power.toggle_battery_conservation_use_case import ToggleBatteryConservationUseCase
 from application.power.toggle_idle_use_case import ToggleIdleUseCase
+from application.power.lock_screen_use_case import LockScreenUseCase
 from application.power.toggle_power_profile_use_case import TogglePowerProfileUseCase
 from application.theme.toggle_theme_use_case import ToggleThemeUseCase
 from application.theme.set_wallpaper_use_case import SetWallpaperUseCase
@@ -152,4 +154,10 @@ class CLIHandlers:
         action = ArrayUtils.getSafe(args, 2)
         use_case = ManageClipboardUseCase(CliphistRepository())
         use_case.execute(action=action)
+
+    @staticmethod
+    def handle_lock(args: list[str]):
+        use_case = LockScreenUseCase(SwayLockRepository())
+        use_case.execute()
+
 

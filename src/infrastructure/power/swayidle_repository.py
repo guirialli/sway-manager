@@ -52,15 +52,10 @@ class SwayIdleRepository(IIdleRepository):
                 "swayidle",
                 "-w",
                 "timeout",
-                str(self.TIMEOUT_LOCK),
-                "swaylock -f",
-                "timeout",
                 str(self.TIMEOUT_SLEEP),
                 'swaymsg "output * dpms off"',
                 "resume",
                 'swaymsg "output * dpms on"',
-                "before-sleep",
-                "swaylock -f",
             ]
             subprocess.Popen(cmd)
             with open(self.STATE_FILE, "w") as f:

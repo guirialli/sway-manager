@@ -31,3 +31,10 @@ class IPowerProfileRepository(ABC):
     @abstractmethod
     def set_profile(self, target: str) -> str:
         pass
+
+
+class ILockRepository(ABC):
+    @abstractmethod
+    def lock_screen(self) -> None:
+        pass
+

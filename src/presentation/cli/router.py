@@ -22,6 +22,7 @@ Comandos Disponíveis:
   screenshot [full|area|window] Tira uma captura de tela e copia para a área de transferência.
   menu [categoria]         Abre o lançador de aplicativos Wofi customizado.
   clipboard [clear|pin]    Abre o gerenciador de clipboard Wofi com suporte a miniaturas e favoritos.
+  lock                     Bloqueia a tela usando swaylock customizado com wallpaper e tema.
   -h, --help               Exibe esta mensagem de ajuda.
 """
     print(help_text.strip())
@@ -65,6 +66,8 @@ def run_cli():
             CLIHandlers.handle_menu(args)
         elif app in ("clipboard", "clip"):
             CLIHandlers.handle_clipboard(args)
+        elif app == "lock":
+            CLIHandlers.handle_lock(args)
         else:
             print(f"Comando '{app}' não reconhecido pelo SwayManager.\n")
             show_help()
