@@ -83,3 +83,41 @@ class SwayWallpaperRepository(IWallpaperRepository):
                         pass
 
         return None
+
+    def get_wallpaper_folder(self) -> str:
+        from infrastructure.config.json_config_repository import JsonConfigRepository
+
+        config_repo = JsonConfigRepository()
+        saved_folder = config_repo.get_setting("wallpaper_folder")
+        if saved_folder:
+            expanded = os.path.expanduser(saved_folder)
+            if os.path.isdir(expanded):
+                return expanded
+
+        # Legacy fallback check
+        legacy_file = os.path.expanduser("~/.config/sway/wallpaper_folder")
+        if os.path.isfile(legacy_file):
+            try:
+                with open(legacy_file, "r") as f:
+                    path = f.read().strip()
+                    expanded = os.path.expanduser(path)
+                    if expanded and os.path.isdir(expanded):
+                        config_repo.set_setting("wallpaper_folder", expanded)
+                        return expanded
+            except Exception:
+                pass
+
+        for candidate in ["~/Imagens/Wallpapers", "~/Pictures/Wallpapers", "~/Pictures", "~/Imagens"]:
+            expanded = os.path.expanduser(candidate)
+            if os.path.isdir(expanded):
+                return expanded
+        return os.path.expanduser("~")
+
+    def set_wallpaper_folder(self, folder_path: str) -> None:
+        from infrastructure.config.json_config_repository import JsonConfigRepository
+
+        expanded = os.path.expanduser(folder_path)
+        config_repo = JsonConfigRepository()
+        config_repo.set_setting("wallpaper_folder", expanded)
+
+

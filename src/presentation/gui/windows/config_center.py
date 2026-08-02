@@ -45,6 +45,10 @@ from application.theme.update_lightdm_use_case import UpdateLightDMUseCase
 from application.theme.manage_appearance_use_case import ManageAppearanceUseCase
 from application.notification.send_notification_use_case import SendNotificationUseCase
 from infrastructure.notification.desktop_notification_repository import DesktopNotificationRepository
+from infrastructure.media.grim_slurp_screenshot_repository import GrimSlurpScreenshotRepository
+from infrastructure.display.sway_display_repository import SwayDisplayRepository
+from application.display.switch_display_mode_use_case import SwitchDisplayModeUseCase
+from domain.display.entities import DisplaySwitchType
 from domain.theme.entities import LightDMSettings, AppearanceSettings
 
 
@@ -53,10 +57,11 @@ class ConfigCenterWindow(QWidget):
         super().__init__()
         QApplication.setDesktopFileName("sway-manager")
         self.setWindowTitle("SwayManager Control Center")
-        self.resize(880, 600)
+        self.resize(920, 620)
         self.setObjectName("mainWindow")
 
         # Instantiate Use Cases
+        self.display_use_case = SwitchDisplayModeUseCase(SwayDisplayRepository())
         self.battery_use_case = ToggleBatteryConservationUseCase(SysfsBatteryRepository())
         self.idle_use_case = ToggleIdleUseCase(SwayIdleRepository())
         self.power_use_case = TogglePowerProfileUseCase(PowerProfilesRepository())
@@ -66,10 +71,10 @@ class ConfigCenterWindow(QWidget):
         self.wallpaper_use_case = SetWallpaperUseCase(SwayWallpaperRepository())
         self.lightdm_use_case = UpdateLightDMUseCase(LightDMRepository())
         self.notification_use_case = SendNotificationUseCase(DesktopNotificationRepository())
+        self.screenshot_repo = GrimSlurpScreenshotRepository()
 
-        self.pasta_imagens = os.path.expanduser("~/Imagens/Wallpapers")
-        if not os.path.exists(self.pasta_imagens):
-            self.pasta_imagens = os.path.expanduser("~/Pictures")
+        self.pasta_imagens = self.wallpaper_use_case.get_wallpaper_folder()
+        self.pasta_screenshots = self.screenshot_repo.get_screenshot_folder()
 
         self.carregador = None
         self.setup_ui()
@@ -101,11 +106,12 @@ class ConfigCenterWindow(QWidget):
         self.sidebar_list.setObjectName("sidebar")
         
         items = [
-            ("🖼️  Papel de Parede", 0),
-            ("🌓  Aparência & Tema", 1),
-            ("🔋  Bateria & Energia", 2),
-            ("☕  Suspensão & Idle", 3),
-            ("🚦  Login & LightDM", 4),
+            ("🖥️  Monitores", 0),
+            ("🖼️  Papel de Parede", 1),
+            ("🌓  Aparência & Tema", 2),
+            ("🔋  Bateria & Energia", 3),
+            ("☕  Suspensão & Idle", 4),
+            ("🚦  Login & LightDM", 5),
         ]
 
         for text, index in items:
@@ -125,6 +131,7 @@ class ConfigCenterWindow(QWidget):
         self.stacked_widget = QStackedWidget()
         self.stacked_widget.setObjectName("mainContainer")
 
+        self.stacked_widget.addWidget(self.create_monitors_page())
         self.stacked_widget.addWidget(self.create_wallpaper_page())
         self.stacked_widget.addWidget(self.create_theme_page())
         self.stacked_widget.addWidget(self.create_power_page())
@@ -159,6 +166,136 @@ class ConfigCenterWindow(QWidget):
 
         card.setLayout(card_layout)
         return card, card_layout
+
+    # ---------------------------------------------------------
+    # Page 0: Monitores & Telas
+    # ---------------------------------------------------------
+    def create_monitors_page(self) -> QWidget:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("background: transparent; border: none;")
+
+        container = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(16)
+
+        header = QLabel("Monitores & Telas")
+        header.setStyleSheet("font-size: 20px; font-weight: 700; background: transparent;")
+        layout.addWidget(header)
+
+        # Card 1 (FIRST CONFIGURATION AT TOP): Screenshots Folder Configuration
+        card_ss, card_ss_layout = self.create_card(
+            "📸 Capturas de Tela (Screenshots)",
+            "Configuração do diretório onde as capturas de tela serão salvas."
+        )
+
+        top_bar = QHBoxLayout()
+        self.lbl_pasta_screenshot = QLabel(f"Pasta: {self.pasta_screenshots}")
+        self.lbl_pasta_screenshot.setStyleSheet("font-size: 12px; color: #8E8E93; background: transparent;")
+
+        btn_select_ss = QPushButton("📁 Escolher Pasta")
+        btn_select_ss.clicked.connect(self.selecionar_pasta_screenshot)
+
+        top_bar.addWidget(self.lbl_pasta_screenshot)
+        top_bar.addStretch()
+        top_bar.addWidget(btn_select_ss)
+        card_ss_layout.addLayout(top_bar)
+        layout.addWidget(card_ss)
+
+        # Card 2: Inline Monitor Layout Selection (Only shown if 2 or more monitors connected)
+        try:
+            mon_count = self.display_use_case.get_connected_monitors_count()
+        except Exception:
+            mon_count = 1
+
+        if mon_count >= 2:
+            card_mon, card_mon_layout = self.create_card(
+                "🖥️ Layout de Monitores",
+                "Selecione o modo de exibição para seus múltiplos monitores."
+            )
+
+            btn_layout = QHBoxLayout()
+            btn_layout.setSpacing(12)
+
+            self.layout_buttons = {}
+            current_mode = self.display_use_case.get_current_layout()
+
+            options = [
+                (DisplaySwitchType.PC_ONLY, "💻\n\nApenas Notebook"),
+                (DisplaySwitchType.MONITOR_ONLY, "🖥️\n\nApenas Monitor"),
+                (DisplaySwitchType.EXTEND, "🖥️ 🖥️\n\nEstender Telas"),
+                (DisplaySwitchType.DUPLICATE, "🖥️ = 🖥️\n\nDuplicar Telas"),
+            ]
+
+            for mode, label_text in options:
+                btn = QPushButton(label_text)
+                btn.setMinimumHeight(70)
+                btn.setCursor(Qt.PointingHandCursor)
+                btn.clicked.connect(lambda _, m=mode: self.aplicar_layout_monitor(m))
+                self.layout_buttons[mode] = btn
+                btn_layout.addWidget(btn)
+
+            card_mon_layout.addLayout(btn_layout)
+            layout.addWidget(card_mon)
+            self.atualizar_destaque_layout_monitores(current_mode)
+
+        layout.addStretch()
+        container.setLayout(layout)
+        scroll.setWidget(container)
+        return scroll
+
+    def aplicar_layout_monitor(self, mode: DisplaySwitchType):
+        try:
+            self.display_use_case.execute(mode)
+            self.atualizar_destaque_layout_monitores(mode)
+        except Exception as e:
+            print(f"Erro ao aplicar layout de monitor: {e}")
+
+    def atualizar_destaque_layout_monitores(self, active_mode: DisplaySwitchType):
+        if not hasattr(self, "layout_buttons"):
+            return
+
+        c = styles.get_colors(self.theme_repo.get_state().current_theme)
+        for mode, btn in self.layout_buttons.items():
+            if mode == active_mode:
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {c['accent']};
+                        border: 2px solid {c['accent']};
+                        border-radius: 10px;
+                        padding: 12px;
+                        font-size: 13px;
+                        font-weight: 700;
+                        color: {c['accent_text']};
+                    }}
+                """)
+            else:
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {c['button_bg']};
+                        border: 1px solid {c['button_border']};
+                        border-radius: 10px;
+                        padding: 12px;
+                        font-size: 13px;
+                        font-weight: 500;
+                        color: {c['text_primary']};
+                    }}
+                    QPushButton:hover {{
+                        background-color: {c['accent']};
+                        border-color: {c['accent']};
+                        color: {c['accent_text']};
+                    }}
+                """)
+
+    def selecionar_pasta_screenshot(self):
+        nova_pasta = QFileDialog.getExistingDirectory(
+            self, "Selecionar Pasta de Capturas de Tela", self.pasta_screenshots
+        )
+        if nova_pasta:
+            self.pasta_screenshots = nova_pasta
+            self.screenshot_repo.set_screenshot_folder(nova_pasta)
+            self.lbl_pasta_screenshot.setText(f"Pasta: {self.pasta_screenshots}")
 
     # ---------------------------------------------------------
     # Page 1: Papel de Parede
@@ -225,6 +362,7 @@ class ConfigCenterWindow(QWidget):
         )
         if nova_pasta:
             self.pasta_imagens = nova_pasta
+            self.wallpaper_use_case.set_wallpaper_folder(nova_pasta)
             self.lbl_pasta.setText(f"Pasta: {self.pasta_imagens}")
             self.iniciar_carregador_imagens()
 

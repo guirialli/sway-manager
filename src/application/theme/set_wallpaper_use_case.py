@@ -11,3 +11,10 @@ class SetWallpaperUseCase:
 
     def get_current(self) -> Optional[str]:
         return self.repository.get_current_wallpaper()
+
+    def get_wallpaper_folder(self) -> str:
+        return self.repository.get_wallpaper_folder()
+
+    def set_wallpaper_folder(self, folder_path: str) -> None:
+        self.repository.set_wallpaper_folder(folder_path)
+

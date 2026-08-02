@@ -15,6 +15,14 @@ class IDisplayRepository(ABC):
     def recarregar_sway(self) -> None:
         pass
 
+    @abstractmethod
+    def get_connected_monitors_count(self) -> int:
+        pass
+
+    @abstractmethod
+    def get_current_layout(self) -> DisplaySwitchType:
+        pass
+
 
 class IBrightnessRepository(ABC):
     @abstractmethod

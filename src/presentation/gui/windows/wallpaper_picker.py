@@ -19,10 +19,10 @@ from utils.string import StringUtils
 
 
 class WallpaperPickerWindow(QWidget):
-    def __init__(self, pasta_imagem: str):
+    def __init__(self, pasta_imagem: str | None = None):
         super().__init__()
-        self.pasta_imagens = pasta_imagem
         self.use_case = SetWallpaperUseCase(SwayWallpaperRepository())
+        self.pasta_imagens = pasta_imagem or self.use_case.get_wallpaper_folder()
         self.theme_repo = GtkQtThemeRepository()
         self.mode = self.theme_repo.get_state().current_theme
 

@@ -50,9 +50,8 @@ class CLIHandlers:
     def handle_wallpaper(args: list[str]):
         pasta = ArrayUtils.getSafe(args, 2)
         if not pasta:
-            pasta = os.path.expanduser("~/Imagens/Wallpapers")
-            if not os.path.exists(pasta):
-                pasta = os.path.expanduser("~/Pictures")
+            use_case = SetWallpaperUseCase(SwayWallpaperRepository())
+            pasta = use_case.get_wallpaper_folder()
         ApplicationFactory.buildWidget(lambda: WallpaperPickerWindow(pasta_imagem=pasta))
 
     @staticmethod

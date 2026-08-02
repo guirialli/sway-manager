@@ -42,3 +42,37 @@ class SwayDisplayRepository(IDisplayRepository):
 
     def recarregar_sway(self) -> None:
         subprocess.run(["swaymsg", "reload"])
+
+    def get_connected_monitors_count(self) -> int:
+        try:
+            import json
+            res = subprocess.run(["swaymsg", "-t", "get_outputs"], capture_output=True, text=True)
+            if res.returncode == 0 and res.stdout:
+                outputs = json.loads(res.stdout)
+                return len(outputs)
+        except Exception:
+            pass
+        return 1
+
+    def get_current_layout(self) -> DisplaySwitchType:
+        try:
+            import json
+            res = subprocess.run(["swaymsg", "-t", "get_outputs"], capture_output=True, text=True)
+            if res.returncode == 0 and res.stdout:
+                outputs = json.loads(res.stdout)
+                monitors = self.get_monitors()
+                int_active = any(o.get("name") == monitors.interno and o.get("active", True) for o in outputs)
+                ext_active = any(o.get("name") == monitors.externo and o.get("active", True) for o in outputs)
+
+                if int_active and not ext_active:
+                    return DisplaySwitchType.PC_ONLY
+                elif ext_active and not int_active:
+                    return DisplaySwitchType.MONITOR_ONLY
+                elif int_active and ext_active:
+                    ps = subprocess.run(["pgrep", "wl-mirror"], capture_output=True)
+                    if ps.returncode == 0:
+                        return DisplaySwitchType.DUPLICATE
+                    return DisplaySwitchType.EXTEND
+        except Exception:
+            pass
+        return DisplaySwitchType.EXTEND

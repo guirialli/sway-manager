@@ -40,6 +40,14 @@ class IWallpaperRepository(ABC):
     def get_current_wallpaper(self) -> Optional[str]:
         pass
 
+    @abstractmethod
+    def get_wallpaper_folder(self) -> str:
+        pass
+
+    @abstractmethod
+    def set_wallpaper_folder(self, folder_path: str) -> None:
+        pass
+
 
 class ILightDMRepository(ABC):
     @abstractmethod
