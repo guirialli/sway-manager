@@ -21,6 +21,7 @@ Comandos Disponíveis:
   power [toggle|status] [flag] Alterna o perfil de energia (-p/-b/-s) ou retorna o status (Waybar JSON).
   screenshot [full|area|window] Tira uma captura de tela e copia para a área de transferência.
   menu [categoria]         Abre o lançador de aplicativos Wofi customizado.
+  clipboard [clear|pin]    Abre o gerenciador de clipboard Wofi com suporte a miniaturas e favoritos.
   -h, --help               Exibe esta mensagem de ajuda.
 """
     print(help_text.strip())
@@ -62,6 +63,8 @@ def run_cli():
             CLIHandlers.handle_screenshot(args)
         elif app == "menu":
             CLIHandlers.handle_menu(args)
+        elif app in ("clipboard", "clip"):
+            CLIHandlers.handle_clipboard(args)
         else:
             print(f"Comando '{app}' não reconhecido pelo SwayManager.\n")
             show_help()

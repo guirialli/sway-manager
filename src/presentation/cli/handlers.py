@@ -13,6 +13,7 @@ from infrastructure.theme.gtk_qt_theme_repository import GtkQtThemeRepository
 from infrastructure.theme.sway_wallpaper_repository import SwayWallpaperRepository
 from infrastructure.media.grim_slurp_screenshot_repository import GrimSlurpScreenshotRepository
 from infrastructure.menu.wofi_launcher import WofiRepository
+from infrastructure.clipboard.cliphist_repository import CliphistRepository
 
 # Application Use Cases
 from application.display.set_brightness_use_case import SetBrightnessUseCase
@@ -25,6 +26,7 @@ from application.theme.toggle_theme_use_case import ToggleThemeUseCase
 from application.theme.set_wallpaper_use_case import SetWallpaperUseCase
 from application.media.take_screenshot_use_case import TakeScreenshotUseCase
 from application.menu.show_menu_use_case import ShowMenuUseCase
+from application.clipboard.manage_clipboard_use_case import ManageClipboardUseCase
 from domain.media.value_objects import ScreenshotMode
 
 # Presentation GUI
@@ -144,4 +146,10 @@ class CLIHandlers:
         category_filter = ArrayUtils.getSafe(args, 2)
         use_case = ShowMenuUseCase(WofiRepository())
         use_case.execute(category_filter=category_filter)
+
+    @staticmethod
+    def handle_clipboard(args: list[str]):
+        action = ArrayUtils.getSafe(args, 2)
+        use_case = ManageClipboardUseCase(CliphistRepository())
+        use_case.execute(action=action)
 
