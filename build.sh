@@ -16,6 +16,13 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
+# Verificar se o patchelf está disponível (necessário para o Nuitka em modo standalone no Linux)
+if ! command -v patchelf &> /dev/null; then
+    echo "❌ Erro: 'patchelf' não encontrado. O Nuitka requer 'patchelf' para compilar em modo standalone no Linux."
+    echo "💡 Instale com: sudo apt install patchelf  (ou sudo dnf install patchelf / nix-shell)"
+    exit 1
+fi
+
 # Criar venv se não existir
 if [ ! -d "$VENV_PATH" ]; then
     echo "📦 Criando ambiente virtual em $VENV_PATH..."

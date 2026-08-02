@@ -29,7 +29,7 @@ class SysfsBatteryRepository(IBatteryRepository):
 
         try:
             res = subprocess.run(
-                "find /sys/devices -name conservation_mode 2>/dev/null | head -n 1",
+                "find /sys/devices /sys/class/power_supply \\( -name conservation_mode -o -name charge_control_end_threshold \\) 2>/dev/null | head -n 1",
                 shell=True,
                 text=True,
                 capture_output=True,
@@ -89,17 +89,43 @@ class SysfsBatteryRepository(IBatteryRepository):
             new_val = 80
             msg = "Conservação Ligada (Limitado a 80%)"
 
-        if os.access(control_file, os.W_OK):
+        write_success = False
+        try:
             with open(control_file, "w") as f:
                 f.write(str(new_val))
-        else:
+            write_success = True
+        except Exception:
             cmd = f"echo {new_val} > '{control_file}'"
-            if subprocess.run("command -v pkexec", shell=True).returncode == 0:
-                subprocess.run(["pkexec", "sh", "-c", cmd])
+            res = None
+            if subprocess.run("command -v pkexec", shell=True, capture_output=True).returncode == 0:
+                res = subprocess.run(["pkexec", "sh", "-c", cmd], capture_output=True)
             else:
-                subprocess.run(["sudo", "sh", "-c", cmd])
+                res = subprocess.run(["sudo", "sh", "-c", cmd], capture_output=True)
+
+            if res and res.returncode == 0:
+                write_success = True
+
+        if write_success:
+            try:
+                with open(control_file, "r") as f:
+                    updated_val = int(f.read().strip())
+                if updated_val != new_val and not (
+                    (new_val == 1 and updated_val in (1, 60, 80))
+                    or (new_val == 0 and updated_val in (0, 100))
+                ):
+                    write_success = False
+            except Exception:
+                pass
+
+        if not write_success:
+            err_msg = "Falha ao alterar conservação da bateria. Permissão negada ou comando cancelado."
+            self.notification_repo.notify(
+                Notification(title="Bateria", message=err_msg, urgency="critical")
+            )
+            return False, f"ERROR: {err_msg}"
 
         self.notification_repo.notify(
             Notification(title="Bateria", message=msg, urgency="normal")
         )
         return True, msg
+

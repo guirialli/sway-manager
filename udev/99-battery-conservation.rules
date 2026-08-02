@@ -1,0 +1,5 @@
+# SwayManager - Battery Conservation & Charge Limit Permissions
+# Grant write permissions for non-root users to toggle battery conservation mode
+
+ACTION=="add|change", KERNEL=="VPC2004:*", SUBSYSTEM=="platform", RUN+="/bin/sh -c 'chmod 0666 /sys/devices/platform/ideapad_acpi/conservation_mode /sys/bus/platform/drivers/ideapad_acpi/VPC2004:*/conservation_mode /sys/%p/conservation_mode 2>/dev/null || true'"
+ACTION=="add|change", SUBSYSTEM=="power_supply", ATTR{charge_control_end_threshold}=="*", RUN+="/bin/sh -c 'chmod 0666 /sys/%p/charge_control_end_threshold 2>/dev/null || true'"

@@ -18,6 +18,7 @@ pkgs.mkShell {
     pkgs.gcc  
     pkgs.scons 
     pkgs.binutils
+    pkgs.patchelf
   ] ++ libs;
 
   shellHook = ''
