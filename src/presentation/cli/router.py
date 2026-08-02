@@ -20,6 +20,7 @@ Comandos Disponíveis:
   theme [toggle|status]    Alterna o tema (Dark/Light) do GTK, Qt e Foot ou retorna o status (Waybar JSON).
   power [toggle|status] [flag] Alterna o perfil de energia (-p/-b/-s) ou retorna o status (Waybar JSON).
   screenshot [full|area|window] Tira uma captura de tela e copia para a área de transferência.
+  menu [categoria]         Abre o lançador de aplicativos Wofi customizado.
   -h, --help               Exibe esta mensagem de ajuda.
 """
     print(help_text.strip())
@@ -59,6 +60,8 @@ def run_cli():
             CLIHandlers.handle_power(args)
         elif app == "screenshot":
             CLIHandlers.handle_screenshot(args)
+        elif app == "menu":
+            CLIHandlers.handle_menu(args)
         else:
             print(f"Comando '{app}' não reconhecido pelo SwayManager.\n")
             show_help()

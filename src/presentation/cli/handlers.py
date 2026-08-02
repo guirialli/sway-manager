@@ -12,6 +12,7 @@ from infrastructure.power.powerprofiles_repository import PowerProfilesRepositor
 from infrastructure.theme.gtk_qt_theme_repository import GtkQtThemeRepository
 from infrastructure.theme.sway_wallpaper_repository import SwayWallpaperRepository
 from infrastructure.media.grim_slurp_screenshot_repository import GrimSlurpScreenshotRepository
+from infrastructure.menu.wofi_launcher import WofiRepository
 
 # Application Use Cases
 from application.display.set_brightness_use_case import SetBrightnessUseCase
@@ -23,6 +24,7 @@ from application.power.toggle_power_profile_use_case import TogglePowerProfileUs
 from application.theme.toggle_theme_use_case import ToggleThemeUseCase
 from application.theme.set_wallpaper_use_case import SetWallpaperUseCase
 from application.media.take_screenshot_use_case import TakeScreenshotUseCase
+from application.menu.show_menu_use_case import ShowMenuUseCase
 from domain.media.value_objects import ScreenshotMode
 
 # Presentation GUI
@@ -136,3 +138,10 @@ class CLIHandlers:
 
         use_case = TakeScreenshotUseCase(GrimSlurpScreenshotRepository())
         use_case.execute(mode)
+
+    @staticmethod
+    def handle_menu(args: list[str]):
+        category_filter = ArrayUtils.getSafe(args, 2)
+        use_case = ShowMenuUseCase(WofiRepository())
+        use_case.execute(category_filter=category_filter)
+
