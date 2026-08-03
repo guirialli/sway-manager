@@ -1,4 +1,6 @@
 import os
+import tempfile
+import shutil
 import unittest
 from unittest.mock import MagicMock, patch
 from domain.media.value_objects import ScreenshotMode
@@ -90,9 +92,6 @@ class TestGrimSlurpScreenshotRepository(unittest.TestCase):
         self.notification_repo.notify.assert_not_called()
 
     def test_set_and_get_screenshot_folder(self):
-        import tempfile
-        import shutil
-
         temp_dir = tempfile.mkdtemp()
         try:
             self.repo.set_screenshot_folder(temp_dir)

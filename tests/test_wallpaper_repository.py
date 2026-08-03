@@ -14,21 +14,14 @@ class TestSwayWallpaperRepositoryFolder(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(self.test_dir, ignore_errors=True)
-        config_folder_file = os.path.expanduser("~/.config/sway/wallpaper_folder")
-        if os.path.isfile(config_folder_file):
-            try:
-                os.remove(config_folder_file)
-            except Exception:
-                pass
 
     def test_set_and_get_wallpaper_folder(self):
-        # Test saving a custom folder path
+        # SWAY_MANAGER_TEST_MODE=1 garante que a gravação vá para /tmp descartável
         self.use_case.set_wallpaper_folder(self.test_dir)
         retrieved_folder = self.use_case.get_wallpaper_folder()
         self.assertEqual(retrieved_folder, self.test_dir)
 
     def test_get_wallpaper_folder_default_fallback(self):
-        # When no config exists, get_wallpaper_folder returns a valid existing directory
         folder = self.repo.get_wallpaper_folder()
         self.assertTrue(os.path.isdir(folder))
 
