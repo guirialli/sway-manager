@@ -105,7 +105,14 @@ class SingleScreenOverlayWindow(QWidget):
 
 class MultiMonitorSelectionController:
     def __init__(self, freeze_files: dict[str, str]):
-        self.app = QApplication.instance() or QApplication(sys.argv)
+        existing_app = QApplication.instance()
+        if existing_app:
+            self.app = existing_app
+            self.created_app = False
+        else:
+            self.app = QApplication(sys.argv)
+            self.created_app = True
+
         self.freeze_files = freeze_files
         self.start_global: Optional[QPoint] = None
         self.current_global: Optional[QPoint] = None
@@ -164,8 +171,6 @@ class MultiMonitorSelectionController:
                 pass
         if self.loop and self.loop.isRunning():
             self.loop.quit()
-        if self.app:
-            self.app.quit()
 
     def save_cropped_selection(self, dst_path: str) -> bool:
         if not self.selected_rect:
@@ -258,9 +263,7 @@ class MultiMonitorSelectionController:
             except Exception:
                 pass
 
-        created_app = (QApplication.instance() is self.app)
-
-        if created_app:
+        if self.created_app:
             self.app.exec()
         else:
             self.loop = QEventLoop()

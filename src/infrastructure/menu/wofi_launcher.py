@@ -9,11 +9,39 @@ from infrastructure.menu.icon_resolver import IconResolver
 
 
 class WofiRepository(IMenuRepository):
+    _cached_items: Optional[List[MenuItem]] = None
+    _cached_line_keys: Dict[str, str] = {}
+
     def __init__(self, parser: Optional[DesktopParser] = None):
         self.parser = parser or DesktopParser()
 
+    @classmethod
+    def _generate_line_key(cls, item: MenuItem) -> str:
+        escaped_name = html.escape(item.normalized_name)
+        icon_path = IconResolver.resolve_icon_path(item.icon)
+        if item.is_system_action:
+            search_tag = f'<span alpha="1%">/s /sessao /sistema /s {escaped_name} /s{escaped_name}</span>'
+            return f"img:{icon_path}:text:<b>{escaped_name}</b> {search_tag}"
+        else:
+            search_tag = f'<span alpha="1%">/a /app /programa /a {escaped_name} /a{escaped_name}</span>'
+            return f"img:{icon_path}:text:<b>{escaped_name}</b> {search_tag}"
+
+    @classmethod
+    def preload_cache(cls) -> List[MenuItem]:
+        parser = DesktopParser()
+        items = parser.parse_all()
+        cls._cached_items = items
+        cls._cached_line_keys = {}
+        for item in items:
+            key = f"{item.normalized_name}::{item.exec_cmd}"
+            cls._cached_line_keys[key] = cls._generate_line_key(item)
+        return items
+
     def get_menu_items(self, category_filter: Optional[str] = None) -> List[MenuItem]:
-        items = self.parser.parse_all()
+        if WofiRepository._cached_items is not None:
+            items = WofiRepository._cached_items
+        else:
+            items = self.parser.parse_all()
 
         if not category_filter:
             return items
@@ -60,15 +88,10 @@ class WofiRepository(IMenuRepository):
         input_lines: List[str] = []
 
         for item in items:
-            escaped_name = html.escape(item.normalized_name)
-            icon_path = IconResolver.resolve_icon_path(item.icon)
-
-            if item.is_system_action:
-                search_tag = f'<span alpha="1%">/s /sessao /sistema /s {escaped_name} /s{escaped_name}</span>'
-                line_key = f"img:{icon_path}:text:<b>{escaped_name}</b> {search_tag}"
-            else:
-                search_tag = f'<span alpha="1%">/a /app /programa /a {escaped_name} /a{escaped_name}</span>'
-                line_key = f"img:{icon_path}:text:<b>{escaped_name}</b> {search_tag}"
+            item_id = f"{item.normalized_name}::{item.exec_cmd}"
+            line_key = WofiRepository._cached_line_keys.get(item_id)
+            if not line_key:
+                line_key = self._generate_line_key(item)
 
             input_lines.append(line_key)
             line_to_item[line_key] = item

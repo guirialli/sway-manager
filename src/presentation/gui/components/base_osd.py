@@ -37,4 +37,4 @@ class OSD(QWidget):
         self.bar.setFixedHeight(10)
         layout.addWidget(self.bar)
 
-        QTimer.singleShot(1200, QApplication.quit)
+        QTimer.singleShot(1200, self.close)

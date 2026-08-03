@@ -1,5 +1,4 @@
 import sys
-from presentation.cli.handlers import CLIHandlers
 
 
 def show_help():
@@ -10,6 +9,8 @@ Uso:
   SwayManager <comando> [opções]
 
 Comandos Disponíveis:
+  daemon                   Inicia o servidor daemon persistente em background.
+  daemon log [-f|--follow] Exibe ou acompanha em tempo real os logs do dia (~/.config/sway-manager/logs/).
   settings, config         Abre o painel gráfico do Control Center (Configurações).
   monitor                  Abre a janela gráfica para alternar layouts de monitores.
   wallpaper [pasta]        Abre a janela gráfica para selecionar papel de parede.
@@ -28,6 +29,41 @@ Comandos Disponíveis:
     print(help_text.strip())
 
 
+def handle_daemon_log(args: list[str]):
+    import os
+    import time
+    from infrastructure.logging.async_logger import get_logger
+
+    log_path = get_logger().get_today_log_path()
+    if not os.path.exists(log_path):
+        print(f"Nenhum log registrado para hoje em: {log_path}")
+        return
+
+    follow = any(flag in args for flag in ("-f", "--follow"))
+
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            if not follow:
+                tail_lines = lines[-50:] if len(lines) > 50 else lines
+                print("".join(tail_lines).strip())
+                return
+
+            print("".join(lines).strip())
+            print(f"--- Acompanhando logs em tempo real ({log_path}) [Ctrl+C para sair] ---")
+            f.seek(0, os.SEEK_END)
+            while True:
+                line = f.readline()
+                if line:
+                    print(line, end="")
+                else:
+                    time.sleep(0.2)
+    except KeyboardInterrupt:
+        print("\nMonitoramento de logs encerrado.")
+    except Exception as ex:
+        print(f"Erro ao ler arquivo de log: {ex}")
+
+
 def run_cli():
     args = sys.argv
 
@@ -41,36 +77,20 @@ def run_cli():
         show_help()
         return
 
-    try:
-        if app in ("settings", "config", "config-center"):
-            CLIHandlers.handle_settings()
-        elif app == "monitor":
-            CLIHandlers.handle_monitor(args)
-        elif app == "wallpaper":
-            CLIHandlers.handle_wallpaper(args)
-        elif app == "osd":
-            CLIHandlers.handle_osd(args)
-        elif app in ("brilho", "brightness"):
-            CLIHandlers.handle_brightness(args)
-        elif app == "battery":
-            CLIHandlers.handle_battery(args)
-        elif app == "idle":
-            CLIHandlers.handle_idle(args)
-        elif app == "theme":
-            CLIHandlers.handle_theme(args)
-        elif app == "power":
-            CLIHandlers.handle_power(args)
-        elif app == "screenshot":
-            CLIHandlers.handle_screenshot(args)
-        elif app == "menu":
-            CLIHandlers.handle_menu(args)
-        elif app in ("clipboard", "clip"):
-            CLIHandlers.handle_clipboard(args)
-        elif app == "lock":
-            CLIHandlers.handle_lock(args)
-        else:
-            print(f"Comando '{app}' não reconhecido pelo SwayManager.\n")
-            show_help()
+    if app in ("daemon", "--daemon", "-d"):
+        if len(args) > 2 and str(args[2]).lower() in ("log", "logs", "-l"):
+            handle_daemon_log(args)
+            return
+        from infrastructure.daemon.daemon_server import SwayManagerDaemon
+        daemon = SwayManagerDaemon()
+        daemon.start()
+        return
 
-    except Exception as ex:
-        print(ex)
+    from infrastructure.daemon.daemon_client import SwayManagerClient
+    if not SwayManagerClient.send_command(args):
+        print(
+            "❌ Erro: O SwayManager Daemon não está em execução.\n"
+            "Inicie o serviço com 'SwayManager daemon' ou verifique a inicialização do Sway.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
