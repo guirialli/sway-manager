@@ -1,7 +1,7 @@
-from PySide6.QtCore import QThread, Signal, Qt
-from PySide6.QtGui import QKeyEvent, QImage
-from PySide6.QtWidgets import QListWidget
 import os
+from PySide6.QtCore import QThread, Signal, Qt, QSize
+from PySide6.QtGui import QKeyEvent, QImage, QImageReader
+from PySide6.QtWidgets import QListWidget
 
 
 class CarregadorDeImagens(QThread):
@@ -16,22 +16,27 @@ class CarregadorDeImagens(QThread):
         if not os.path.isdir(self.pasta):
             return
         for nome_arquivo in sorted(os.listdir(self.pasta)):
+            if self.isInterruptionRequested():
+                break
             if not nome_arquivo.lower().endswith(extensoes_validar):
                 continue
 
             caminho_completo = os.path.join(self.pasta, nome_arquivo)
-            imagem = QImage(caminho_completo)
+            try:
+                reader = QImageReader(caminho_completo)
+                reader.setAutoTransform(True)
+                reader.setScaledSize(QSize(240, 135))
+                miniatura = reader.read()
 
-            if imagem.isNull():
-                continue
+                if miniatura.isNull():
+                    continue
 
-            miniatura = imagem.scaled(
-                240,
-                135,
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            self.imagem_carregada.emit(caminho_completo, miniatura)
+                if self.isInterruptionRequested():
+                    break
+
+                self.imagem_carregada.emit(caminho_completo, miniatura)
+            except Exception:
+                pass
 
 
 class ListaImagens(QListWidget):

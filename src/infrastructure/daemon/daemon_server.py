@@ -90,6 +90,10 @@ class SwayManagerDaemon:
             app = QApplication(sys.argv)
         app.setQuitOnLastWindowClosed(False)
 
+        # Restringe o cache interno de pixmaps do Qt para no máximo 2MB
+        from PySide6.QtGui import QPixmapCache
+        QPixmapCache.setCacheLimit(2048)
+
         # Remove socket estático anterior se existia arquivo residual
         if os.path.exists(self.socket_path):
             try:
@@ -123,8 +127,31 @@ class SwayManagerDaemon:
         # Conecta sinal de novas conexões
         self.server.newConnection.connect(self._handle_new_connection)
 
+        # Configura timer periódico de limpeza de memória (Garbage Collection) a cada 30 segundos
+        self.gc_timer = QTimer()
+        self.gc_timer.timeout.connect(self.perform_gc)
+        self.gc_timer.start(30000)
+
         # Executa o loop principal do Qt
         sys.exit(app.exec())
+
+    def perform_gc(self):
+        """
+        Executa a Coleta de Lixo do Python (gc.collect), limpa o cache interno de pixmaps do Qt
+        e invoca malloc_trim(0) da libc para devolver páginas de heap desalocadas ao kernel Linux.
+        """
+        try:
+            import gc
+            import ctypes
+            from PySide6.QtGui import QPixmapCache
+            QPixmapCache.clear()
+            gc.collect()
+            try:
+                ctypes.CDLL("libc.so.6").malloc_trim(0)
+            except Exception:
+                pass
+        except Exception:
+            pass
 
     def _handle_new_connection(self):
         try:
@@ -246,3 +273,5 @@ class SwayManagerDaemon:
             tb_str = traceback.format_exc().strip()
             self.logger.error(f"Falha na execução do comando '{cmd}': {ex}\n{tb_str}")
             print(f"Erro ao executar '{cmd}': {ex}", file=sys.stderr)
+        finally:
+            self.perform_gc()

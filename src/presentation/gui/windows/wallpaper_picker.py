@@ -82,3 +82,12 @@ class WallpaperPickerWindow(QWidget):
             self.close()
         except Exception as e:
             print(f"Erro ao aplicar wallpaper {e}")
+
+    def closeEvent(self, event):
+        if hasattr(self, "carregador") and self.carregador and self.carregador.isRunning():
+            self.carregador.requestInterruption()
+            self.carregador.quit()
+            self.carregador.wait(1000)
+        if hasattr(self, "lista_imagens") and self.lista_imagens:
+            self.lista_imagens.clear()
+        super().closeEvent(event)

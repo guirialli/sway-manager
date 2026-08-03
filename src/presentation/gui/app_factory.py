@@ -1,8 +1,29 @@
-from typing import Callable
-from PySide6.QtWidgets import QWidget, QApplication
+import gc
 import sys
+import ctypes
+from typing import Callable
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmapCache
+from PySide6.QtWidgets import QWidget, QApplication
 
 QT_QPA_PLATFORM = "wayland"
+
+
+def _cleanup_memory(widget: QWidget, active_list: list[QWidget]):
+    if widget in active_list:
+        try:
+            active_list.remove(widget)
+        except Exception:
+            pass
+    try:
+        QPixmapCache.clear()
+        gc.collect()
+        try:
+            ctypes.CDLL("libc.so.6").malloc_trim(0)
+        except Exception:
+            pass
+    except Exception:
+        pass
 
 
 class ApplicationFactory:
@@ -25,12 +46,13 @@ class ApplicationFactory:
 
         try:
             widget = fn_create_widget()
+            widget.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
             cls._active_widgets.append(widget)
+
             widget.destroyed.connect(
-                lambda: cls._active_widgets.remove(widget)
-                if widget in cls._active_widgets
-                else None
+                lambda: _cleanup_memory(widget, cls._active_widgets)
             )
+
             widget.show()
             widget.raise_()
             widget.activateWindow()
@@ -44,5 +66,3 @@ class ApplicationFactory:
 
         if is_standalone:
             sys.exit(app.exec())
-
-
