@@ -64,8 +64,49 @@ def handle_daemon_log(args: list[str]):
         print(f"Erro ao ler arquivo de log: {ex}")
 
 
+def dispatch_cli_command(args: list[str]):
+    if not args or len(args) < 2:
+        return
+    cmd = str(args[1]).lower()
+    from presentation.cli.handlers import CLIHandlers
+
+    if cmd in ("settings", "config", "config-center"):
+        CLIHandlers.handle_settings()
+    elif cmd == "monitor":
+        CLIHandlers.handle_monitor(args)
+    elif cmd == "wallpaper":
+        CLIHandlers.handle_wallpaper(args)
+    elif cmd == "osd":
+        CLIHandlers.handle_osd(args)
+    elif cmd in ("brilho", "brightness"):
+        CLIHandlers.handle_brightness(args)
+    elif cmd == "battery":
+        CLIHandlers.handle_battery(args)
+    elif cmd == "idle":
+        CLIHandlers.handle_idle(args)
+    elif cmd == "theme":
+        CLIHandlers.handle_theme(args)
+    elif cmd == "power":
+        CLIHandlers.handle_power(args)
+    elif cmd == "screenshot":
+        CLIHandlers.handle_screenshot(args)
+    elif cmd == "menu":
+        CLIHandlers.handle_menu(args)
+    elif cmd in ("clipboard", "clip"):
+        CLIHandlers.handle_clipboard(args)
+    elif cmd == "lock":
+        CLIHandlers.handle_lock(args)
+    else:
+        print(f"Comando '{cmd}' não reconhecido pelo SwayManager.\n", file=sys.stderr)
+
+
 def run_cli():
-    args = sys.argv
+    args = list(sys.argv)
+
+    if "--standalone" in args:
+        args.remove("--standalone")
+        dispatch_cli_command(args)
+        return
 
     if len(args) == 1:
         show_help()
@@ -94,3 +135,4 @@ def run_cli():
             file=sys.stderr,
         )
         sys.exit(1)
+

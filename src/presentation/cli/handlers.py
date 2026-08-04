@@ -33,21 +33,17 @@ from domain.media.value_objects import ScreenshotMode
 
 # Presentation GUI
 from presentation.gui.app_factory import ApplicationFactory
-from presentation.gui.windows.config_center import ConfigCenterWindow
-from presentation.gui.windows.monitor_swap import MonitorSwapWindow
-from presentation.gui.windows.wallpaper_picker import WallpaperPickerWindow
-from presentation.gui.windows.brightness_popup import BrightnessPopup
-from presentation.gui.osd.brightness_osd import BrightnessOSD
-from presentation.gui.osd.volume_osd import VolumeOSD
 
 
 class CLIHandlers:
     @staticmethod
     def handle_settings():
+        from presentation.gui.windows.config_center import ConfigCenterWindow
         ApplicationFactory.buildWidget(lambda: ConfigCenterWindow())
 
     @staticmethod
     def handle_monitor(args: list[str]):
+        from presentation.gui.windows.monitor_swap import MonitorSwapWindow
         ApplicationFactory.buildWidget(
             lambda: MonitorSwapWindow(), desktop_file_name="sway.apps.monitor-swap"
         )
@@ -58,6 +54,7 @@ class CLIHandlers:
         if not pasta:
             use_case = SetWallpaperUseCase(SwayWallpaperRepository())
             pasta = use_case.get_wallpaper_folder()
+        from presentation.gui.windows.wallpaper_picker import WallpaperPickerWindow
         ApplicationFactory.buildWidget(lambda: WallpaperPickerWindow(pasta_imagem=pasta))
 
     @staticmethod
@@ -70,19 +67,25 @@ class CLIHandlers:
 
         if osd_type == "brilho":
             if not action or action.lower() == "popup":
+                from presentation.gui.windows.brightness_popup import BrightnessPopup
                 ApplicationFactory.buildWidget(lambda: BrightnessPopup())
             else:
+                from presentation.gui.osd.brightness_osd import BrightnessOSD
                 ApplicationFactory.buildWidget(lambda: BrightnessOSD(action))
         elif osd_type == "volume":
+            from presentation.gui.osd.volume_osd import VolumeOSD
             ApplicationFactory.buildWidget(lambda: VolumeOSD(action))
 
     @staticmethod
     def handle_brightness(args: list[str]):
         action = ArrayUtils.getSafe(args, 2)
         if not action or action.lower() == "popup":
+            from presentation.gui.windows.brightness_popup import BrightnessPopup
             ApplicationFactory.buildWidget(lambda: BrightnessPopup())
         else:
+            from presentation.gui.osd.brightness_osd import BrightnessOSD
             ApplicationFactory.buildWidget(lambda: BrightnessOSD(action))
+
 
     @staticmethod
     def handle_battery(args: list[str]):

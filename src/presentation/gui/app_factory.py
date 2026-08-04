@@ -2,11 +2,17 @@ import gc
 import sys
 import ctypes
 from typing import Callable
+from infrastructure.daemon.server.config.gui_config import setup_qt_environment
+
+# Ensure Qt Wayland resilience flags are set before Qt initialization
+setup_qt_environment()
+
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmapCache
 from PySide6.QtWidgets import QWidget, QApplication
 
-QT_QPA_PLATFORM = "wayland"
+
 
 
 def _cleanup_memory(widget: QWidget, active_list: list[QWidget]):

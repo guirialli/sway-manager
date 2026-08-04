@@ -7,54 +7,17 @@ import traceback
 import threading
 import contextlib
 from typing import List
-from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QCoreApplication, QTimer
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
-from presentation.cli.handlers import CLIHandlers
-from infrastructure.menu.wofi_launcher import WofiRepository
+
 from infrastructure.daemon.daemon_client import get_socket_path
 from infrastructure.logging.async_logger import get_logger
+from infrastructure.daemon.server.gui import GuiServerHandler, GUI_COMMANDS
+from infrastructure.daemon.server.cli import CliServerHandler, INTERACTIVE_COMMANDS
+from infrastructure.daemon.server.config.gui_config import setup_qt_environment, setup_qt_cache
+from infrastructure.daemon.server.config.cli_config import setup_exception_handlers
 
-INTERACTIVE_COMMANDS = {
-    "menu",
-    "screenshot",
-    "clipboard",
-    "clip",
-    "settings",
-    "config",
-    "config-center",
-    "monitor",
-    "wallpaper",
-    "osd",
-    "brilho",
-    "brightness",
-    "lock",
-}
-
-
-def setup_global_exception_handlers(logger):
-    """
-    Configura manipuladores globais de exceção para interceptar falhas
-    não tratadas na thread principal e em threads secundárias do Python/Qt,
-    registrando o traceback completo sem derrubar o daemon.
-    """
-    def handle_sys_exception(exc_type, exc_value, exc_traceback):
-        if issubclass(exc_type, KeyboardInterrupt):
-            sys.__excepthook__(exc_type, exc_value, exc_traceback)
-            return
-        formatted_tb = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
-        logger.error(f"⚠️ Exceção não tratada capturada no daemon:\n{formatted_tb.strip()}")
-
-    def handle_thread_exception(args):
-        if issubclass(args.exc_type, KeyboardInterrupt):
-            return
-        formatted_tb = "".join(traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback))
-        thread_name = args.thread.name if args.thread else "desconhecida"
-        logger.error(f"⚠️ Exceção não tratada em thread secundária ('{thread_name}'):\n{formatted_tb.strip()}")
-
-    sys.excepthook = handle_sys_exception
-    threading.excepthook = handle_thread_exception
 
 
 class SwayManagerDaemon:
@@ -76,23 +39,23 @@ class SwayManagerDaemon:
             return False
 
     def start(self):
-        # Configura interceptação global de exceções para garantir resiliência
-        setup_global_exception_handlers(self.logger)
+        # Configura resiliência do Qt Wayland e manipuladores globais de exceção
+        setup_qt_environment()
+        setup_exception_handlers(self.logger)
 
         # Evita execução de múltiplas instâncias do daemon
         if self.is_daemon_running():
             print("🚀 SwayManager Daemon já está em execução.")
             sys.exit(0)
 
-        # Configura a aplicação Qt persistente
-        app = QApplication.instance()
+        # Configura a aplicação Qt persistente em modo Core (sem conexão Wayland GUI persistente)
+        app = QCoreApplication.instance()
         if not app:
-            app = QApplication(sys.argv)
-        app.setQuitOnLastWindowClosed(False)
+            app = QCoreApplication(sys.argv)
 
         # Restringe o cache interno de pixmaps do Qt para no máximo 2MB
-        from PySide6.QtGui import QPixmapCache
-        QPixmapCache.setCacheLimit(2048)
+        setup_qt_cache()
+
 
         # Remove socket estático anterior se existia arquivo residual
         if os.path.exists(self.socket_path):
@@ -112,8 +75,9 @@ class SwayManagerDaemon:
         print(msg)
         self.logger.info(msg)
 
-        # Pré-carrega cache do Wofi / DesktopParser em memória
+        # Pré-carrega cache do Wofi / DesktopParser sob demanda apenas ao iniciar
         try:
+            from infrastructure.menu.wofi_launcher import WofiRepository
             wofi_repo = WofiRepository()
             items = wofi_repo.preload_cache()
             cache_msg = f"📦 Cache do Wofi e aplicativos pré-carregado em RAM ({len(items)} itens)!"
@@ -187,14 +151,14 @@ class SwayManagerDaemon:
 
             cmd = str(args[1]).lower() if len(args) > 1 else ""
 
-            if cmd in INTERACTIVE_COMMANDS:
+            if CliServerHandler.is_interactive(cmd):
                 # Comandos gráficos/interativos: responde a linha JSON imediatamente (< 1ms)
                 response = {"stdout": "", "stderr": "", "exit_code": 0}
                 socket_conn.write((json.dumps(response) + "\n").encode("utf-8"))
                 socket_conn.flush()
                 socket_conn.disconnectFromServer()
 
-                # Agenda a execução da GUI na thread principal do Qt
+                # Agenda a execução na thread principal do Qt
                 QTimer.singleShot(0, lambda: self._safe_dispatch_command(args))
                 return
             else:
@@ -226,6 +190,12 @@ class SwayManagerDaemon:
             except Exception:
                 pass
 
+    def _spawn_standalone_gui(self, args: List[str]):
+        """
+        Delega ao GuiServerHandler a execução de janelas GUI em subprocessos isolados.
+        """
+        GuiServerHandler.handle_gui_command(args, logger=self.logger)
+
     def _safe_dispatch_command(self, args: List[str]):
         """
         Executa o despacho do comando com proteção de exceções de nível superior,
@@ -236,42 +206,15 @@ class SwayManagerDaemon:
 
         cmd = str(args[1]).lower()
 
+        if GuiServerHandler.is_gui_command(cmd):
+            self._spawn_standalone_gui(args)
+            return
+
         try:
-            if cmd in ("settings", "config", "config-center"):
-                CLIHandlers.handle_settings()
-            elif cmd == "monitor":
-                CLIHandlers.handle_monitor(args)
-            elif cmd == "wallpaper":
-                CLIHandlers.handle_wallpaper(args)
-            elif cmd == "osd":
-                CLIHandlers.handle_osd(args)
-            elif cmd in ("brilho", "brightness"):
-                CLIHandlers.handle_brightness(args)
-            elif cmd == "battery":
-                CLIHandlers.handle_battery(args)
-            elif cmd == "idle":
-                CLIHandlers.handle_idle(args)
-            elif cmd == "theme":
-                CLIHandlers.handle_theme(args)
-            elif cmd == "power":
-                CLIHandlers.handle_power(args)
-            elif cmd == "screenshot":
-                CLIHandlers.handle_screenshot(args)
-            elif cmd == "menu":
-                CLIHandlers.handle_menu(args)
-            elif cmd in ("clipboard", "clip"):
-                CLIHandlers.handle_clipboard(args)
-            elif cmd == "lock":
-                CLIHandlers.handle_lock(args)
-            elif cmd in ("reload-cache", "refresh-cache"):
-                items = WofiRepository().preload_cache()
-                print(f"Cache do Wofi recarregado com sucesso ({len(items)} itens).")
-                self.logger.info(f"Cache do Wofi recarregado ({len(items)} itens).")
-            else:
-                print(f"Comando '{cmd}' não reconhecido pelo SwayManager.\n")
-        except Exception as ex:
-            tb_str = traceback.format_exc().strip()
-            self.logger.error(f"Falha na execução do comando '{cmd}': {ex}\n{tb_str}")
-            print(f"Erro ao executar '{cmd}': {ex}", file=sys.stderr)
+            CliServerHandler.handle_cli_command(args, logger=self.logger)
+        except Exception:
+            pass
         finally:
             self.perform_gc()
+
+

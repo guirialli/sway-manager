@@ -75,6 +75,22 @@ class TestDaemonClientAndServer(unittest.TestCase):
             os.remove(mock_sock_path)
         os.rmdir(temp_dir)
 
+    def test_gui_commands_dispatch_spawns_standalone(self):
+        daemon = SwayManagerDaemon()
+        daemon._spawn_standalone_gui = MagicMock()
+        daemon._safe_dispatch_command(["sway-manager", "settings"])
+        daemon._spawn_standalone_gui.assert_called_once_with(["sway-manager", "settings"])
+
+    def test_spawn_standalone_gui_invokes_subprocess(self):
+        daemon = SwayManagerDaemon()
+        with patch("subprocess.Popen") as mock_popen:
+            daemon._spawn_standalone_gui(["sway-manager", "settings"])
+            mock_popen.assert_called_once()
+            cmd_run = mock_popen.call_args[0][0]
+            self.assertIn("--standalone", cmd_run)
+            self.assertIn("settings", cmd_run)
+
 
 if __name__ == "__main__":
     unittest.main()
+
