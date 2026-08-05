@@ -122,6 +122,7 @@ def run_cli():
         if len(args) > 2 and str(args[2]).lower() in ("log", "logs", "-l"):
             handle_daemon_log(args)
             return
+
         from infrastructure.daemon.daemon_server import SwayManagerDaemon
         daemon = SwayManagerDaemon()
         daemon.start()
@@ -135,4 +136,5 @@ def run_cli():
             file=sys.stderr,
         )
         sys.exit(1)
+
 

@@ -31,7 +31,6 @@ class CliServerHandler:
 
         cmd = str(args[1]).lower()
 
-        # Importação sob demanda (lazy import) para economizar RAM
         from presentation.cli.handlers import CLIHandlers
 
         try:

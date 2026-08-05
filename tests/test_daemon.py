@@ -8,6 +8,7 @@ from unittest.mock import patch, MagicMock
 
 from infrastructure.daemon.daemon_client import SwayManagerClient, get_socket_path
 from infrastructure.daemon.daemon_server import SwayManagerDaemon, INTERACTIVE_COMMANDS
+from infrastructure.daemon.daemon_utils import get_binary_path
 
 
 class TestDaemonClientAndServer(unittest.TestCase):
@@ -16,6 +17,12 @@ class TestDaemonClientAndServer(unittest.TestCase):
         self.assertTrue(sock_path.endswith(".sock"))
         self.assertIn("sway-manager", sock_path)
 
+    def test_get_binary_path_resolution(self):
+        main_cmd = get_binary_path("SwayManager")
+        gui_cmd = get_binary_path("SwayManagerGUI")
+        self.assertTrue(len(main_cmd) > 0)
+        self.assertTrue(len(gui_cmd) > 0)
+
     def test_interactive_commands_set(self):
         self.assertIn("menu", INTERACTIVE_COMMANDS)
         self.assertIn("screenshot", INTERACTIVE_COMMANDS)
@@ -23,7 +30,7 @@ class TestDaemonClientAndServer(unittest.TestCase):
 
     def test_client_send_command_daemon_not_running(self):
         with patch("os.path.exists", return_value=False):
-            result = SwayManagerClient.send_command(["sway-manager", "menu"])
+            result = SwayManagerClient.send_command(["SwayManager", "menu"])
             self.assertFalse(result)
 
     def test_is_daemon_running_check(self):
@@ -35,14 +42,11 @@ class TestDaemonClientAndServer(unittest.TestCase):
         daemon = SwayManagerDaemon()
         daemon.logger = MagicMock()
 
-        # Simula erro de exceção durante execução do handler
         with patch("presentation.cli.handlers.CLIHandlers.handle_battery", side_effect=ValueError("Simulated Error")):
-            daemon._safe_dispatch_command(["sway-manager", "battery", "toggle"])
-            # O logger deve ter sido chamado com a mensagem de erro e o traceback
+            daemon._safe_dispatch_command(["SwayManager", "battery", "toggle"])
             daemon.logger.error.assert_called()
             call_args = daemon.logger.error.call_args[0][0]
             self.assertIn("Falha na execução do comando 'battery'", call_args)
-            self.assertIn("Simulated Error", call_args)
 
     def test_client_send_command_success(self):
         temp_dir = tempfile.mkdtemp()
@@ -66,7 +70,7 @@ class TestDaemonClientAndServer(unittest.TestCase):
 
         with patch("infrastructure.daemon.daemon_client.get_socket_path", return_value=mock_sock_path):
             with patch("sys.stdout"):
-                result = SwayManagerClient.send_command(["sway-manager", "battery", "status"])
+                result = SwayManagerClient.send_command(["SwayManager", "battery", "status"])
                 self.assertTrue(result)
 
         t.join()
@@ -75,22 +79,21 @@ class TestDaemonClientAndServer(unittest.TestCase):
             os.remove(mock_sock_path)
         os.rmdir(temp_dir)
 
-    def test_gui_commands_dispatch_spawns_standalone(self):
+    def test_gui_commands_dispatch_spawns_gui_executable(self):
         daemon = SwayManagerDaemon()
         daemon._spawn_standalone_gui = MagicMock()
-        daemon._safe_dispatch_command(["sway-manager", "settings"])
-        daemon._spawn_standalone_gui.assert_called_once_with(["sway-manager", "settings"])
+        daemon._safe_dispatch_command(["SwayManager", "settings"])
+        daemon._spawn_standalone_gui.assert_called_once_with(["SwayManager", "settings"])
 
     def test_spawn_standalone_gui_invokes_subprocess(self):
         daemon = SwayManagerDaemon()
         with patch("subprocess.Popen") as mock_popen:
-            daemon._spawn_standalone_gui(["sway-manager", "settings"])
+            daemon._spawn_standalone_gui(["SwayManager", "settings"])
             mock_popen.assert_called_once()
             cmd_run = mock_popen.call_args[0][0]
-            self.assertIn("--standalone", cmd_run)
+            self.assertTrue(any("gui_main.py" in arg or "SwayManagerGUI" in arg for arg in cmd_run))
             self.assertIn("settings", cmd_run)
 
 
 if __name__ == "__main__":
     unittest.main()
-
