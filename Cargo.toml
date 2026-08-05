@@ -1,0 +1,15 @@
+[workspace]
+members = [
+    "crates/sway-manager-core",
+    "crates/sway-manager-daemon",
+    "crates/sway-manager-cli",
+    "crates/sway-manager-gui",
+]
+resolver = "2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

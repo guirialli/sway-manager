@@ -1,1 +1,0 @@
-# Presentation GUI osd package

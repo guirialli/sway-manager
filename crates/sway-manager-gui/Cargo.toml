@@ -1,0 +1,12 @@
+[package]
+name = "sway-manager-gui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+slint = "1.8"
+image = "0.25"
+sway-manager-core = { path = "../sway-manager-core" }
+
+[build-dependencies]
+slint-build = "1.8"

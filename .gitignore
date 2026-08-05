@@ -4,3 +4,4 @@ out
 build
 sway-manager.spec
 nuitka-crash-report.xml
+target

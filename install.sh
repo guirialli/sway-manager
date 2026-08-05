@@ -1,15 +1,22 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
-echo "Compilando o projeto..."
-./build.sh
+echo "📦 Compilando SwayManager em Rust (Modo Release)..."
+if ! command -v cargo &> /dev/null; then
+    echo "❌ Erro: Cargo/Rust não encontrado! Instale com: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+    exit 1
+fi
 
-echo "Instalando o sway-manager"
-rm -rf ~/.config/sway/bin/sway-manager
-rm -f ~/.config/sway/bin/SwayManager
-mkdir -p ~/.config/sway/bin/sway-manager
-cp -rf ./out/main.dist/* ~/.config/sway/bin/sway-manager/
-ln -s $HOME/.config/sway/bin/sway-manager/sway-manager $HOME/.config/sway/bin/SwayManager
+cargo build --release --workspace
+
+INSTALL_DIR="$HOME/.config/sway/bin"
+mkdir -p "$INSTALL_DIR"
+
+cp -f target/release/SwayManager "$INSTALL_DIR/SwayManager" 2>/dev/null || cp -f target/release/sway-manager-cli "$INSTALL_DIR/SwayManager"
+cp -f target/release/sway-manager-daemon "$INSTALL_DIR/sway-manager-daemon"
+chmod +x "$INSTALL_DIR/SwayManager" "$INSTALL_DIR/sway-manager-daemon"
+
+echo "✅ Compilação e instalação concluídas em $INSTALL_DIR/SwayManager!"
 
 INSTALL_UDEV=true
 if [[ "$1" == "--no-udev" || "$1" == "--skip-udev" ]]; then
@@ -25,4 +32,3 @@ if [ "$INSTALL_UDEV" = true ]; then
         echo "Regras udev instaladas com sucesso!"
     fi
 fi
-

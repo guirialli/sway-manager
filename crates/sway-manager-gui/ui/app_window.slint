@@ -1,0 +1,205 @@
+import { Button, VerticalBox, HorizontalBox, Slider, LineEdit, ScrollView } from "std-widgets.slint";
+
+export component OsdWindow inherits Window {
+    in property <string> osd-icon: "🔊";
+    in property <int> value: 50;
+    in property <string> osd-title: "Volume";
+
+    width: 260px;
+    height: 140px;
+    background: #1e1e2e;
+    no-frame: true;
+    always-on-top: true;
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 8px;
+        alignment: center;
+
+        Text {
+            text: root.osd-icon;
+            font-size: 32px;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: root.osd-title + ": " + root.value + "%";
+            font-size: 14px;
+            color: #cdd6f4;
+            horizontal-alignment: center;
+        }
+        Rectangle {
+            height: 8px;
+            background: #313244;
+            border-radius: 4px;
+            Rectangle {
+                width: parent.width * (root.value / 100);
+                background: #89b4fa;
+                border-radius: 4px;
+                x: 0;
+            }
+        }
+    }
+}
+
+export component WallpaperPickerWindow inherits Window {
+    in property <string> current-wallpaper: "";
+    callback select-wallpaper(string);
+
+    width: 800px;
+    height: 600px;
+    title: "SwayManager Wallpaper Picker";
+    background: #1e1e2e;
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 16px;
+
+        Text {
+            text: "Seletor de Papéis de Parede";
+            font-size: 20px;
+            color: #cdd6f4;
+        }
+
+        Text {
+            text: "Selecione uma imagem da sua galeria de wallpapers:";
+            font-size: 14px;
+            color: #a6adc8;
+        }
+
+        HorizontalBox {
+            alignment: center;
+            Button {
+                text: "Aplicar e Fechar";
+                clicked => { root.select-wallpaper(root.current-wallpaper); }
+            }
+        }
+    }
+}
+
+export component ConfigCenterWindow inherits Window {
+    in property <bool> battery-conservation: false;
+    in property <bool> idle-inhibited: false;
+    in property <string> power-profile: "balanced";
+    in property <string> theme-mode: "dark";
+
+    callback toggle-battery();
+    callback toggle-idle();
+    callback set-power-profile(string);
+    callback toggle-theme();
+
+    width: 720px;
+    height: 520px;
+    title: "SwayManager Control Center";
+    background: #1e1e2e;
+
+    HorizontalLayout {
+        // Sidebar
+        Rectangle {
+            width: 200px;
+            background: #181825;
+
+            VerticalLayout {
+                padding: 16px;
+                spacing: 12px;
+
+                Text {
+                    text: "SwayManager";
+                    font-size: 18px;
+                    color: #89b4fa;
+                }
+
+                Rectangle { height: 1px; background: #313244; }
+
+                Text { text: "⚙️ Geral"; font-size: 14px; color: #cdd6f4; }
+                Text { text: "🔋 Bateria & Energia"; font-size: 14px; color: #a6adc8; }
+                Text { text: "🖥️ Monitores"; font-size: 14px; color: #a6adc8; }
+                Text { text: "🎨 Aparência"; font-size: 14px; color: #a6adc8; }
+            }
+        }
+
+        // Main Content Area
+        VerticalLayout {
+            padding: 24px;
+            spacing: 16px;
+
+            Text {
+                text: "Configurações do Sistema";
+                font-size: 22px;
+                color: #cdd6f4;
+            }
+
+            Rectangle {
+                background: #313244;
+                border-radius: 8px;
+                height: 60px;
+
+                HorizontalLayout {
+                    padding: 12px;
+                    alignment: space-between;
+                    Text { text: "Conservação de Bateria (Lenovo ~80%)"; font-size: 14px; color: #cdd6f4; vertical-alignment: center; }
+                    Button {
+                        text: root.battery-conservation ? "Ativado" : "Desativado";
+                        clicked => { root.toggle-battery(); }
+                    }
+                }
+            }
+
+            Rectangle {
+                background: #313244;
+                border-radius: 8px;
+                height: 60px;
+
+                HorizontalLayout {
+                    padding: 12px;
+                    alignment: space-between;
+                    Text { text: "Inibidor de Inatividade (SwayIdle)"; font-size: 14px; color: #cdd6f4; vertical-alignment: center; }
+                    Button {
+                        text: root.idle-inhibited ? "Inibido (Sem Suspensão)" : "Normal";
+                        clicked => { root.toggle-idle(); }
+                    }
+                }
+            }
+
+            Rectangle {
+                background: #313244;
+                border-radius: 8px;
+                height: 60px;
+
+                HorizontalLayout {
+                    padding: 12px;
+                    alignment: space-between;
+                    Text { text: "Perfil de Energia"; font-size: 14px; color: #cdd6f4; vertical-alignment: center; }
+                    Button {
+                        text: root.power-profile;
+                        clicked => { root.set-power-profile("performance"); }
+                    }
+                }
+            }
+
+            Rectangle {
+                background: #313244;
+                border-radius: 8px;
+                height: 60px;
+
+                HorizontalLayout {
+                    padding: 12px;
+                    alignment: space-between;
+                    Text { text: "Tema do Sistema (Dark/Light)"; font-size: 14px; color: #cdd6f4; vertical-alignment: center; }
+                    Button {
+                        text: root.theme-mode;
+                        clicked => { root.toggle-theme(); }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component FreezeSelectionOverlay inherits Window {
+    callback area-selected(int, int, int, int);
+
+    width: 1920px;
+    height: 1080px;
+    no-frame: true;
+    background: #00000044;
+}

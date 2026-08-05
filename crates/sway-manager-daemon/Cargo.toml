@@ -1,0 +1,16 @@
+[package]
+name = "sway-manager-daemon"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing = "0.1"
+tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+freedesktop-desktop-entry = "0.5"
+dirs = "5.0"
+sway-manager-core = { path = "../sway-manager-core" }
+sway-manager-gui = { path = "../sway-manager-gui" }
