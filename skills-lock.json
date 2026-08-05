@@ -12,6 +12,12 @@
       "sourceType": "github",
       "skillPath": "skills/python-testing/SKILL.md",
       "computedHash": "b93e0777d979c500ce0cd81557d49129aa3c110905e0e98e0cf1f47892821440"
+    },
+    "qt-ui-design": {
+      "source": "mavlink/qgroundcontrol",
+      "sourceType": "github",
+      "skillPath": "tools/skills/qt-ui-design/SKILL.md",
+      "computedHash": "152a8aa244cc4a49654dc509cb693672d07ad43eed91e4078ccae5ad99049f78"
     }
   }
 }

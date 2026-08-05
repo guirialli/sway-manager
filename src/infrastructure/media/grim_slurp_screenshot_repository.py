@@ -75,6 +75,31 @@ class GrimSlurpScreenshotRepository(IScreenshotRepository):
         cropped = img.copy(QRect(x, y, w, h))
         return cropped.save(dst_path)
 
+    def _take_slurp_selection(self, dst_path: str, frozen_path: str) -> bool:
+        """Fallback to the compositor-native selector when Qt is unavailable."""
+        try:
+            slurp_res = subprocess.run(["slurp"], capture_output=True, text=True)
+        except OSError:
+            return False
+        if slurp_res.returncode != 0 or not slurp_res.stdout.strip():
+            return False
+
+        geometry = self._parse_geometry(slurp_res.stdout)
+        if geometry is None:
+            return False
+
+        x, y, width, height = geometry
+        try:
+            grim_res = subprocess.run(
+                ["grim", "-g", f"{x},{y} {width}x{height}", dst_path],
+                capture_output=True,
+            )
+        except OSError:
+            return self._crop_and_save(frozen_path, dst_path, geometry)
+        if grim_res.returncode == 0 and os.path.isfile(dst_path):
+            return True
+        return self._crop_and_save(frozen_path, dst_path, geometry)
+
     def get_screenshot_folder(self) -> str:
         from infrastructure.config.json_config_repository import JsonConfigRepository
 
@@ -150,15 +175,8 @@ class GrimSlurpScreenshotRepository(IScreenshotRepository):
                     )
 
                     saved_ok = FreezeSelectionOverlay.select_area(freeze_files, filename)
-                except Exception:
-                    # Fallback to slurp if GUI overlay is unavailable
-                    slurp_res = subprocess.run(
-                        ["slurp"], capture_output=True, text=True
-                    )
-                    if slurp_res.returncode == 0 and slurp_res.stdout.strip():
-                        geom = self._parse_geometry(slurp_res.stdout)
-                        if geom:
-                            saved_ok = self._crop_and_save(full_freeze_file, filename, geom)
+                except (ImportError, OSError, RuntimeError):
+                    saved_ok = self._take_slurp_selection(filename, full_freeze_file)
 
                 if not saved_ok:
                     print("Screenshot cancelled or failed.")
@@ -179,7 +197,15 @@ class GrimSlurpScreenshotRepository(IScreenshotRepository):
                 saved_ok = img.save(filename)
 
             if saved_ok and os.path.isfile(filename):
-                subprocess.run(f"wl-copy < '{filename}'", shell=True)
+                subprocess.run(f"wl-copy --type image/png < '{filename}'", shell=True)
+                try:
+                    from PySide6.QtGui import QGuiApplication, QImage
+                    if QGuiApplication.instance():
+                        cb = QGuiApplication.clipboard()
+                        if cb:
+                            cb.setImage(QImage(filename))
+                except Exception:
+                    pass
                 self.notification_repo.notify(
                     Notification(title=f"Captura {action_desc} salva em {filename}")
                 )
@@ -193,4 +219,3 @@ class GrimSlurpScreenshotRepository(IScreenshotRepository):
                         os.remove(f)
                     except Exception:
                         pass
-

@@ -85,6 +85,10 @@ class TestDaemonClientAndServer(unittest.TestCase):
         daemon._safe_dispatch_command(["SwayManager", "settings"])
         daemon._spawn_standalone_gui.assert_called_once_with(["SwayManager", "settings"])
 
+        daemon._spawn_standalone_gui.reset_mock()
+        daemon._safe_dispatch_command(["SwayManager", "screenshot", "area"])
+        daemon._spawn_standalone_gui.assert_called_once_with(["SwayManager", "screenshot", "area"])
+
     def test_spawn_standalone_gui_invokes_subprocess(self):
         daemon = SwayManagerDaemon()
         with patch("subprocess.Popen") as mock_popen:

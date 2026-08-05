@@ -13,6 +13,7 @@ GUI_COMMANDS = {
     "osd",
     "brilho",
     "brightness",
+    "screenshot",
 }
 
 

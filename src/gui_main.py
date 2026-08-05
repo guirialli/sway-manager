@@ -18,6 +18,8 @@ def run_gui_app():
         CLIHandlers.handle_wallpaper(args)
     elif cmd in ("osd", "brilho", "brightness"):
         CLIHandlers.handle_osd(args)
+    elif cmd == "screenshot":
+        CLIHandlers.handle_screenshot(args)
     else:
         print(
             f"Comando GUI '{cmd}' não reconhecido pelo SwayManagerGUI.",

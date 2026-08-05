@@ -91,6 +91,26 @@ class TestGrimSlurpScreenshotRepository(unittest.TestCase):
         self.repo.take_screenshot(ScreenshotMode.AREA)
         self.notification_repo.notify.assert_not_called()
 
+    @patch("subprocess.run")
+    @patch("os.path.isfile", return_value=True)
+    def test_slurp_fallback_uses_grim_geometry_capture(
+        self, mock_isfile, mock_subprocess
+    ):
+        def subprocess_side_effect(cmd, **kwargs):
+            result = MagicMock()
+            result.returncode = 0
+            result.stdout = "10,20 30x40\n" if cmd == ["slurp"] else ""
+            return result
+
+        mock_subprocess.side_effect = subprocess_side_effect
+
+        saved = self.repo._take_slurp_selection("selection.png", "frozen.png")
+
+        self.assertTrue(saved)
+        mock_subprocess.assert_any_call(
+            ["grim", "-g", "10,20 30x40", "selection.png"], capture_output=True
+        )
+
     def test_set_and_get_screenshot_folder(self):
         temp_dir = tempfile.mkdtemp()
         try:
