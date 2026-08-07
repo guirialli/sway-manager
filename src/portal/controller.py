@@ -1,13 +1,14 @@
 import re
-import select
 import sys
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
-from PySide6.QtWidgets import QApplication, QDialog
+if TYPE_CHECKING:
+    from PySide6.QtWidgets import QApplication, QDialog
 
 from portal.models import PortalResult, PortalSource, PortalSourceType, WindowSharingAvailability
 from portal.outputs_provider import SwayOutputsProvider
 from portal.result_writer import PortalResultWriter
+from portal.selection_cache import store_selection, try_replay
 from portal.windows_provider import WindowSharingProvider
 from portal.exceptions import PortalException, SwayNotAvailableError
 
@@ -20,7 +21,7 @@ class PortalController:
         outputs_provider: SwayOutputsProvider | None = None,
         windows_provider: WindowSharingProvider | None = None,
         result_writer: PortalResultWriter | None = None,
-        dialog_factory: Callable[[list[PortalSource], list[PortalSource]], QDialog] | None = None,
+        dialog_factory: Callable[[list[PortalSource], list[PortalSource]], "QDialog"] | None = None,
     ) -> None:
         self._outputs_provider = outputs_provider or SwayOutputsProvider()
         self._windows_provider = windows_provider or WindowSharingProvider()
@@ -36,6 +37,16 @@ class PortalController:
         else:
             monitors = self._load_monitors()
             windows, window_sharing_reason = self._load_windows()
+
+        # If the same set of sources was presented within the last 30 s,
+        # replay the previous selection silently.  Some clients (Discord,
+        # Chromium/Electron) re-invoke SelectSources / Start multiple times;
+        # showing the chooser UI three times in a row is terrible UX.
+        cached = try_replay(monitors, windows)
+        if cached is not None:
+            return cached
+
+        from PySide6.QtWidgets import QApplication
 
         app = QApplication.instance()
         owns_app = app is None
@@ -55,6 +66,9 @@ class PortalController:
             dialog.source_selected.connect(on_accepted)
 
         dialog.exec()
+
+        if result is not None:
+            store_selection(result, monitors, windows)
 
         if owns_app:
             app.quit()
@@ -98,7 +112,7 @@ class PortalController:
         monitors: list[PortalSource],
         windows: list[PortalSource],
         window_sharing_reason: str | None,
-    ) -> QDialog:
+    ) -> "QDialog":
         if self._dialog_factory is not None:
             return self._dialog_factory(monitors, windows)
 
@@ -117,18 +131,14 @@ class PortalController:
 
         When xdg-desktop-portal-wlr v0.8.x invokes the chooser with
         chooser_type=dmenu, it writes a newline-separated list of source
-        labels on stdin and closes the pipe.  Reading stdin back returns
-        that data.  When stdin is a TTY (interactive, test, daemon
-        context), returns None so the controller falls back to
-        swaymsg/lswt discovery.
+        labels on stdin and closes the pipe via fclose().  sys.stdin.read()
+        blocks until xdpw finishes writing and closes the write end, then
+        returns all the data at once.  An empty result means stdin was
+        closed without data (simple mode, /dev/null, etc.).  When stdin
+        is a TTY (interactive, test, daemon context), returns None so the
+        controller falls back to swaymsg/lswt discovery.
         """
         if sys.stdin.isatty():
-            return None
-        try:
-            r, _, _ = select.select([sys.stdin], [], [], 0.05)
-        except (OSError, ValueError):
-            return None
-        if not r:
             return None
         try:
             content = sys.stdin.read()

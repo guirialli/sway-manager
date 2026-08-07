@@ -321,6 +321,84 @@ class TestPortalController(unittest.TestCase):
             raw_label=monitors[0].raw_label,
         )
         self.assertEqual(str(monitor_result), "Monitor: eDP-1")
+class TestSelectionCache(unittest.TestCase):
+    def setUp(self):
+        from portal.selection_cache import clear_cache
+
+        clear_cache()
+
+    def tearDown(self):
+        from portal.selection_cache import clear_cache
+
+        clear_cache()
+
+    def _monitor(self, name="eDP-1"):
+        return PortalSource(
+            id=name,
+            source_type=PortalSourceType.MONITOR,
+            label=name,
+            details="",
+            raw_label=f"Monitor: {name}",
+        )
+
+    def _window(self, identifier="abc123", title="Firefox"):
+        return PortalSource(
+            id=identifier,
+            source_type=PortalSourceType.WINDOW,
+            label=title,
+            details="",
+            raw_label=f"Window: {title} ({identifier})",
+        )
+
+    def test_replay_returns_none_with_no_cache(self):
+        from portal.selection_cache import try_replay
+
+        self.assertIsNone(try_replay([self._monitor()], [self._window()]))
+
+    def test_store_and_replay_same_sources(self):
+        from portal.selection_cache import store_selection, try_replay
+
+        monitors = [self._monitor("HDMI-A-1")]
+        windows = [self._window("abc123", "Firefox")]
+
+        result = PortalResult(
+            source_type=PortalSourceType.WINDOW,
+            id="abc123",
+            raw_label="Window: Firefox (abc123)",
+        )
+        store_selection(result, monitors, windows)
+
+        replayed = try_replay(monitors, windows)
+        self.assertIsNotNone(replayed)
+        self.assertEqual(str(replayed), "Window: Firefox (abc123)")
+        self.assertEqual(replayed.source_type, PortalSourceType.WINDOW)
+        self.assertEqual(replayed.id, "abc123")
+
+    def test_different_sources_not_replayed(self):
+        from portal.selection_cache import store_selection, try_replay
+
+        monitors_a = [self._monitor("eDP-1")]
+        windows_a = [self._window("abc", "Firefox")]
+        result = PortalResult(PortalSourceType.WINDOW, "abc", raw_label="Window: Firefox (abc)")
+        store_selection(result, monitors_a, windows_a)
+
+        # different monitors → no replay
+        monitors_b = [self._monitor("HDMI-A-1")]
+        self.assertIsNone(try_replay(monitors_b, windows_a))
+
+        # different windows → no replay
+        windows_b = [self._window("def", "Discord")]
+        self.assertIsNone(try_replay(monitors_a, windows_b))
+
+    def test_clear_cache_prevents_replay(self):
+        from portal.selection_cache import clear_cache, store_selection, try_replay
+
+        monitors = [self._monitor()]
+        result = PortalResult(PortalSourceType.MONITOR, "eDP-1", raw_label="Monitor: eDP-1")
+        store_selection(result, monitors, [])
+
+        clear_cache()
+        self.assertIsNone(try_replay(monitors, []))
 
 class TestPortalDialog(unittest.TestCase):
     @classmethod
