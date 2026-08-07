@@ -163,4 +163,60 @@ class CLIHandlers:
         use_case = LockScreenUseCase(SwayLockRepository())
         use_case.execute()
 
+    @staticmethod
+    def handle_portal(args: list[str]):
+        from portal.controller import PortalController
+        from portal.diagnostics import PortalDiagnostics
+        from portal.exceptions import SwayNotAvailableError
+        from utils.array import ArrayUtils
+
+        subcommand = ArrayUtils.getSafe(args, 2, "").lower()
+
+        if subcommand == "status":
+            report = PortalDiagnostics().run()
+            print(f"Wayland: {'sim' if report.is_wayland else 'não'}")
+            print(f"Compositor: {report.compositor or 'não detectado'}")
+            print(f"Captura de janelas: {'sim' if report.supports_window_sharing else 'não'}")
+            print(f"PipeWire: {'sim' if report.pipewire_available else 'não'}")
+            print(f"xdg-desktop-portal: {'ativo' if report.xdg_desktop_portal_active else 'inativo'}")
+            print(f"xdg-desktop-portal-wlr: {'ativo' if report.xdg_desktop_portal_wlr_active else 'inativo'}")
+            print(f"Variáveis de sessão: {'exportadas' if report.session_vars_exported else 'pendentes'}")
+            if report.errors:
+                print("\nProblemas encontrados:")
+                for error in report.errors:
+                    print(f"  - {error}")
+            print(f"\nPronto para compartilhar: {'sim' if report.is_ready() else 'não'}")
+            return
+
+        if subcommand == "test":
+            CLIHandlers._run_portal(test_mode=True)
+            return
+
+        # Default: invoked as chooser by xdg-desktop-portal-wlr.
+        try:
+            CLIHandlers._run_portal(test_mode=False)
+        except SwayNotAvailableError as exc:
+            print(f"Erro: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+    @staticmethod
+    def _run_portal(test_mode: bool) -> None:
+        import sys
+        from portal.controller import PortalController
+        from portal.result_writer import PortalResultWriter
+
+        controller = PortalController()
+        result = controller.run()
+
+        if test_mode:
+            if result is None:
+                print("[TESTE] Cancelado pelo usuário")
+            else:
+                print(f"[TESTE] Seleção: {result}")
+            return
+
+        controller.write_result(result)
+        if result is None:
+            sys.exit(0)
+
 

@@ -21,6 +21,9 @@ Comandos Disponíveis:
   theme [toggle|status]    Alterna o tema (Dark/Light) do GTK, Qt e Foot ou retorna o status (Waybar JSON).
   power [toggle|status] [flag] Alterna o perfil de energia (-p/-b/-s) ou retorna o status (Waybar JSON).
   screenshot [full|area|window] Tira uma captura de tela e copia para a área de transferência.
+  portal                   Abre o seletor de compartilhamento de tela para o xdg-desktop-portal-wlr.
+  portal status            Verifica se o compartilhamento de tela está disponível.
+  portal test              Abre o seletor em modo de teste e exibe o resultado.
   menu [categoria]         Abre o lançador de aplicativos Wofi customizado.
   clipboard [clear|pin]    Abre o gerenciador de clipboard Wofi com suporte a miniaturas e favoritos.
   lock                     Bloqueia a tela usando swaylock customizado com wallpaper e tema.
@@ -96,6 +99,8 @@ def dispatch_cli_command(args: list[str]):
         CLIHandlers.handle_clipboard(args)
     elif cmd == "lock":
         CLIHandlers.handle_lock(args)
+    elif cmd == "portal":
+        CLIHandlers.handle_portal(args)
     else:
         print(f"Comando '{cmd}' não reconhecido pelo SwayManager.\n", file=sys.stderr)
 
@@ -126,6 +131,12 @@ def run_cli():
         from infrastructure.daemon.daemon_server import SwayManagerDaemon
         daemon = SwayManagerDaemon()
         daemon.start()
+        return
+
+    # Portal is invoked by xdg-desktop-portal-wlr as a subprocess; it must run
+    # locally regardless of whether the daemon is active.
+    if app == "portal":
+        dispatch_cli_command(args)
         return
 
     from infrastructure.daemon.daemon_client import SwayManagerClient
