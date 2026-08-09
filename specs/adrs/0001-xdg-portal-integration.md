@@ -7,12 +7,12 @@
 ## Context & Problem Statement
 Applications running under Wayland (browsers, video conferencing software, recording applications like OBS) require screen sharing through PipeWire using the XDG Desktop Portal system. `xdg-desktop-portal-wlr` handles PipeWire stream creation on Sway/wlroots compositors but requires an external command/dialog to allow the user to choose which screen or window to share.
 
-We needed an integrated visual selector matching SwayManager's PySide6 Apple HIG styling that strictly respects the line-based stdout contract expected by `xdg-desktop-portal-wlr`.
+We needed an integrated visual selector matching SwayManager's PySide6 Cyberpunk styling that strictly respects the line-based stdout contract expected by `xdg-desktop-portal-wlr`.
 
 ## Decision Drivers
 1. **User Experience**: Consistent, beautiful GUI dialog matching the rest of SwayManager.
-2. **Protocol Safety**: `xdg-desktop-portal-wlr` expects exact line protocol on stdout (`Monitor: <name>` or `Window: <id>`). Diagnostic logs must never leak into stdout.
-3. **Graceful Fallback**: Support full monitor sharing on all Sway versions, while allowing window capture when Sway $\ge$ 1.12 and `lswt` are present.
+2. **Protocol Safety**: `xdg-desktop-portal-wlr` expects exact line protocol on stdout (`output:<name>` or `window:<id>`). Diagnostic logs must never leak into stdout.
+3. **Graceful Fallback**: Support full monitor sharing on all Sway versions, while allowing window capture when Sway $\ge$ 1.8 / SwayFX and `lswt` are present.
 4. **Non-Intrusive Installation**: Automate `portals.conf` and `wlr/config` setup while preserving user backups.
 
 ## Decision Outcome
@@ -31,4 +31,4 @@ We implemented a dedicated sub-package `src/portal/` and CLI command `SwayManage
 - Automated configuration setup with zero-loss backup.
 
 ### Trade-offs / Limitations
-- Window sharing depends on Sway 1.12+ (ext-foreign-toplevel-list-v1) and `lswt`; older Sway versions fall back to monitor-only selection.
+- Window sharing depends on Sway 1.8+ / SwayFX (ext-foreign-toplevel-list-v1) and `lswt`; older Sway versions fall back to monitor-only selection.

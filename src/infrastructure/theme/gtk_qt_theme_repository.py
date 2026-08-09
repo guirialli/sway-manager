@@ -19,8 +19,8 @@ from infrastructure.notification.desktop_notification_repository import (
 class GtkQtThemeRepository(IThemeRepository):
     WORK_PATH = os.path.expanduser("~/.config/theme_toggle")
     FILE = os.path.join(WORK_PATH, "theme")
-    FOOT_DIR = os.path.expanduser("~/.config/foot")
-    FOOT_FILE = os.path.join(FOOT_DIR, "foot.ini")
+    KITTY_DIR = os.path.expanduser("~/.config/kitty")
+    KITTY_FILE = os.path.join(KITTY_DIR, "theme.conf")
 
     def __init__(self, notification_repo: Optional[INotificationRepository] = None):
         self.notification_repo = notification_repo or DesktopNotificationRepository()
@@ -41,7 +41,7 @@ class GtkQtThemeRepository(IThemeRepository):
 
         gtk4 = "prefer-dark" if new_theme == "dark" else "prefer-light"
         gtk3 = "Adwaita-dark" if new_theme == "dark" else "Adwaita"
-        foot_theme = "black.ini" if new_theme == "dark" else "white.ini"
+        kitty_theme = "black.conf" if new_theme == "dark" else "white.conf"
 
         # Apply GTK theme
         subprocess.run(
@@ -57,17 +57,17 @@ class GtkQtThemeRepository(IThemeRepository):
             ["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", gtk3]
         )
 
-        # Apply Foot terminal theme
-        theme_src = os.path.join(self.FOOT_DIR, "themes", foot_theme)
+        # Apply Kitty terminal theme
+        theme_src = os.path.join(self.KITTY_DIR, "themes", kitty_theme)
         if os.path.isfile(theme_src):
             try:
-                if os.path.isfile(self.FOOT_FILE) or os.path.islink(
-                    self.FOOT_FILE
+                if os.path.isfile(self.KITTY_FILE) or os.path.islink(
+                    self.KITTY_FILE
                 ):
-                    os.remove(self.FOOT_FILE)
-                shutil.copyfile(theme_src, self.FOOT_FILE)
+                    os.remove(self.KITTY_FILE)
+                shutil.copyfile(theme_src, self.KITTY_FILE)
             except Exception as e:
-                print(f"Error copying foot theme: {e}")
+                print(f"Error copying kitty theme: {e}")
 
         # Apply Qt themes
         self._apply_qt_theme(new_theme)

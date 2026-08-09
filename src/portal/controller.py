@@ -45,7 +45,10 @@ class PortalController:
         cached = try_replay(monitors, windows)
         if cached is not None:
             return cached
+        from infrastructure.daemon.server.config.gui_config import setup_qt_environment
+        setup_qt_environment()
 
+        from presentation.gui.styles import get_palette, get_stylesheet
         from PySide6.QtWidgets import QApplication
 
         app = QApplication.instance()
@@ -53,6 +56,8 @@ class PortalController:
         if owns_app:
             app = QApplication(sys.argv)
         app.setDesktopFileName("sway.apps.portal-chooser")
+        app.setPalette(get_palette("dark"))
+        app.setStyleSheet(get_stylesheet("dark"))
 
         dialog = self._create_dialog(monitors, windows, window_sharing_reason)
         result: PortalResult | None = None

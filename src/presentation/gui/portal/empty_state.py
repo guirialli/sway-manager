@@ -10,11 +10,13 @@ class EmptyState(QFrame):
         super().__init__()
         self.setObjectName("emptyState")
         self.setFrameShape(QFrame.Shape.StyledPanel)
+        palette = self.palette()
+        palette.setColor(
+            QPalette.ColorRole.Window,
+            palette.color(QPalette.ColorRole.AlternateBase),
+        )
+        self.setPalette(palette)
         self.setAutoFillBackground(True)
-        self.setAccessibleName(f"{title}. {description}")
-
-        self.setAutoFillBackground(True)
-
         layout = QVBoxLayout(self)
         layout.setContentsMargins(28, 28, 28, 28)
         layout.setSpacing(8)

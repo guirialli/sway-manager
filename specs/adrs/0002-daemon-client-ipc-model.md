@@ -16,7 +16,7 @@ We needed a fast, persistent execution model while supporting standalone GUI win
 4. **GUI Separation**: Interactive GUI tools (`SwayManagerGUI`, `config-center`, `monitor`) should run as dedicated processes when triggered by the daemon to keep the daemon lightweight and responsive.
 
 ## Decision Outcome
-We implemented an Async Unix Domain Socket daemon server (`SwayManagerDaemon`) listening at `~/.config/sway-manager/daemon.sock`.
+We implemented an Async Unix Domain Socket daemon server (`SwayManagerDaemon`) listening at `$XDG_RUNTIME_DIR/sway-manager-$UID.sock`.
 
 ### Execution Flow:
 1. `SwayManager daemon` starts the persistent daemon process in background.

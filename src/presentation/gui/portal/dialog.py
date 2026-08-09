@@ -255,140 +255,123 @@ class PortalDialog(QDialog):
         self._cancel_btn.setFocus()
 
     def _apply_theme(self) -> None:
+        from presentation.gui.styles import get_colors
+        c = get_colors("dark")
         self.setStyleSheet(
-            """
-            QDialog {
-                background: qradialgradient(
-                    cx: 0.5, cy: 0.3, radius: 0.8,
-                    stop: 0 #1a1625, stop: 1 #12101a
-                );
-                color: #f8fafc;
-            }
-            QLabel {
-                color: #f8fafc;
+            f"""
+            QDialog {{
+                background-color: {c['window_bg']};
+                color: {c['text_primary']};
+            }}
+            QLabel {{
+                color: {c['text_primary']};
                 background: transparent;
-            }
-            QLabel#portalHeader {
-                color: #ffffff;
+            }}
+            QLabel#portalHeader {{
+                color: {c['text_primary']};
                 padding-bottom: 4px;
-            }
-            QLabel#portalDescription {
-                color: rgba(248, 250, 252, 0.7);
+            }}
+            QLabel#portalDescription {{
+                color: {c['text_secondary']};
                 padding-bottom: 8px;
-            }
-            QTabBar {
+            }}
+            QTabBar {{
                 background: transparent;
                 border: none;
-            }
-            QTabBar::tab {
-                background: #1e1b2e;
-                color: rgba(248, 250, 252, 0.75);
-                border: 1px solid #3d3452;
-                border-radius: 10px;
-                padding: 8px 28px;
+            }}
+            QTabBar::tab {{
+                background-color: {c['card_bg']};
+                color: {c['text_secondary']};
+                border: 1px solid {c['card_border']};
+                border-radius: 8px;
+                padding: 8px 24px;
                 margin-right: 8px;
-                min-width: 90px;
-                max-width: 140px;
+                min-width: 80px;
                 font-weight: bold;
-            }
-            QTabBar::tab:selected {
-                background: qlineargradient(
-                    x1: 0, y1: 0, x2: 1, y2: 1,
-                    stop: 0 #7c3aed, stop: 1 #a855f7
-                );
-                color: #ffffff;
-                border: 1px solid #8b5cf6;
-            }
-            QTabBar::tab:hover {
-                background: #262236;
-                color: #f8fafc;
-            }
-            QTabBar::tab:selected:hover {
-                background: qlineargradient(
-                    x1: 0, y1: 0, x2: 1, y2: 1,
-                    stop: 0 #7c3aed, stop: 1 #a855f7
-                );
-                color: #ffffff;
-            }
-            QScrollArea {
+            }}
+            QTabBar::tab:selected {{
+                background-color: {c['accent']};
+                color: {c['accent_text']};
+                border: 1px solid {c['accent']};
+            }}
+            QTabBar::tab:hover {{
+                background-color: {c['button_hover']};
+                color: {c['text_primary']};
+            }}
+            QTabBar::tab:selected:hover {{
+                background-color: {c['accent_hover']};
+                color: {c['accent_text']};
+            }}
+            QScrollArea {{
                 background: transparent;
                 border: none;
-            }
-            QScrollArea > QWidget > QWidget {
+            }}
+            QScrollArea > QWidget > QWidget {{
                 background: transparent;
-            }
-            QScrollBar:vertical {
+            }}
+            QScrollBar:vertical {{
                 background: transparent;
                 width: 8px;
                 margin: 0px;
-            }
-            QScrollBar::handle:vertical {
-                background: #4c3f6b;
+            }}
+            QScrollBar::handle:vertical {{
+                background-color: {c['scrollbar_handle']};
                 border-radius: 4px;
                 min-height: 30px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: #7c3aed;
-            }
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background-color: {c['scrollbar_handle_hover']};
+            }}
             QScrollBar::add-line:vertical,
-            QScrollBar::sub-line:vertical {
+            QScrollBar::sub-line:vertical {{
                 height: 0px;
-            }
-            QPushButton {
-                background: #1e1b2e;
-                color: rgba(248, 250, 252, 0.9);
-                border: 1px solid #3d3452;
-                border-radius: 10px;
+            }}
+            QPushButton {{
+                background-color: {c['button_bg']};
+                color: {c['text_primary']};
+                border: 1px solid {c['button_border']};
+                border-radius: 8px;
                 padding: 8px 22px;
                 font-weight: bold;
                 min-width: 100px;
-            }
-            QPushButton:hover {
-                background: #262236;
-                border-color: #5b4e78;
-                color: #f8fafc;
-            }
-            QPushButton:pressed {
-                background: #161421;
-            }
-            QPushButton:disabled {
-                background: #161421;
-                color: rgba(248, 250, 252, 0.35);
-                border: 1px solid #2a2438;
-            }
-            QPushButton[default="true"] {
-                background: qlineargradient(
-                    x1: 0, y1: 0, x2: 1, y2: 1,
-                    stop: 0 #7c3aed, stop: 1 #a855f7
-                );
-                color: #ffffff;
-                border: 1px solid #8b5cf6;
-            }
-            QPushButton[default="true"]:hover {
-                background: qlineargradient(
-                    x1: 0, y1: 0, x2: 1, y2: 1,
-                    stop: 0 #8b5cf6, stop: 1 #c084fc
-                );
-                border-color: #a78bfa;
-            }
-            QPushButton[default="true"]:pressed {
-                background: qlineargradient(
-                    x1: 0, y1: 0, x2: 1, y2: 1,
-                    stop: 0 #6d28d9, stop: 1 #9333ea
-                );
-            }
-            QPushButton[default="true"]:disabled {
-                background: #2d1f4a;
-                color: rgba(248, 250, 252, 0.5);
-                border: 1px solid #3d2b61;
-            }
-            QFrame#emptyState {
-                background: #1e1b2e;
-                border: 1px solid #3d3452;
+            }}
+            QPushButton:hover {{
+                background-color: {c['button_hover']};
+                border-color: {c['accent']};
+                color: {c['text_primary']};
+            }}
+            QPushButton:pressed {{
+                background-color: {c['button_bg']};
+            }}
+            QPushButton:disabled {{
+                background-color: {c['input_bg']};
+                color: {c['text_muted']};
+                border: 1px solid {c['card_border']};
+            }}
+            QPushButton[default="true"] {{
+                background-color: {c['accent']};
+                color: {c['accent_text']};
+                border: 1px solid {c['accent']};
+            }}
+            QPushButton[default="true"]:hover {{
+                background-color: {c['accent_hover']};
+                border-color: {c['accent_hover']};
+            }}
+            QPushButton[default="true"]:pressed {{
+                background-color: {c['accent']};
+            }}
+            QPushButton[default="true"]:disabled {{
+                background-color: {c['input_bg']};
+                color: {c['text_muted']};
+                border: 1px solid {c['card_border']};
+            }}
+            QFrame#emptyState {{
+                background-color: {c['card_bg']};
+                border: 1px solid {c['card_border']};
                 border-radius: 12px;
-            }
-            QLabel#emptyStateDesc {
-                color: rgba(248, 250, 252, 0.65);
-            }
+            }}
+            QLabel#emptyStateDesc {{
+                color: {c['text_secondary']};
+            }}
             """
         )

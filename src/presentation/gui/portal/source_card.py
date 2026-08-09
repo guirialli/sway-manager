@@ -60,39 +60,36 @@ class SourceCard(QFrame):
         return self._selected
 
     def _update_style(self) -> None:
+        from presentation.gui.styles import get_colors
+        c = get_colors("dark")
         if self._selected:
-            background = "qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1, stop: 0 #7c3aed, stop: 1 #a855f7)"
-            foreground = "#ffffff"
+            background = c["selection_bg"]
+            foreground = c["accent_text"]
             details_color = "rgba(255, 255, 255, 0.9)"
-            border = "#a78bfa"
-            shadow = "#5b21b6"
+            border = c["accent_hover"]
         else:
-            background = "#1e1b2e"
-            foreground = "#f8fafc"
-            details_color = "rgba(248, 250, 252, 0.65)"
-            border = "#3d3452"
-            shadow = "transparent"
+            background = c["card_bg"]
+            foreground = c["text_primary"]
+            details_color = c["text_secondary"]
+            border = c["card_border"]
 
         self.setStyleSheet(
             f"""
             QFrame#sourceCard {{
-                background: {background};
+                background-color: {background};
                 border: 1px solid {border};
-                border-radius: 12px;
+                border-radius: 10px;
                 padding: 2px;
             }}
             QFrame#sourceCard:hover {{
-                background: qlineargradient(
-                    x1: 0, y1: 0, x2: 1, y2: 1,
-                    stop: 0 #262236, stop: 1 #2d2640
-                );
-                border: 1px solid #5b4e78;
+                background-color: {c['button_hover']};
+                border: 1px solid {c['accent']};
             }}
             QFrame#sourceCard:focus {{
-                border: 2px solid #8b5cf6;
+                border: 2px solid {c['accent']};
             }}
             QFrame#sourceCard:hover:focus {{
-                border: 2px solid #a78bfa;
+                border: 2px solid {c['accent_hover']};
             }}
             QLabel {{
                 color: {foreground};
