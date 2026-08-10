@@ -302,6 +302,17 @@ class TestPortalController(unittest.TestCase):
         self.assertEqual(windows[1].id, "7890abcdef12")
         self.assertEqual(windows[1].label, "Discord - Call")
 
+    def test_parses_legacy_dmenu_output_names(self):
+        from portal.controller import PortalController
+
+        monitors, windows = PortalController._parse_dmenu_sources(
+            "HDMI-A-3\nDP-1\n"
+        )
+
+        self.assertEqual([monitor.id for monitor in monitors], ["HDMI-A-3", "DP-1"])
+        self.assertEqual(monitors[0].raw_label, "HDMI-A-3")
+        self.assertEqual(windows, [])
+
     def test_dmenu_result_preserves_raw_label(self):
         from portal.controller import PortalController
 

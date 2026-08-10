@@ -21,24 +21,24 @@ flowchart LR
 
 ## 2. Screencast Chooser Contract (`stdout` Protocol)
 
-`xdg-desktop-portal-wlr` executes `SwayManager portal` (configured in `~/.config/xdg-desktop-portal-wlr/config`). It expects a strict line-based contract written to standard output (`stdout`):
+`xdg-desktop-portal-wlr` executes `SwayManager portal` (configured in
+`~/.config/xdg-desktop-portal-wlr/config`). The chooser MUST write exactly the
+same source label that the backend supplied on standard input:
 
-### Output Line Format
-1. **Monitor Selection**:
+1. **xdg-desktop-portal-wlr 0.7.x** supplies bare output names:
    ```text
-   output:<monitor_name>
+   HDMI-A-3
    ```
-   *Example*: `output:eDP-1` or `output:HDMI-A-1`
-
-2. **Window Selection** (v0.8.x protocol / dmenu mode):
+2. **Newer dmenu protocols** can supply structured source labels:
    ```text
-   window:<window_identifier>
+   Monitor: eDP-1
+   Window: Firefox (abc123)
    ```
-   *Example*: `window:12345`
+3. **User cancellation** writes nothing to `stdout` and exits with status
+   code `0`.
 
-3. **User Cancellation**:
-   Nothing is written to `stdout`, and the process exits with status code `0`.
-
+Preserving the raw label is required because the backend performs an
+exact-string comparison when resolving the selected source.
 ---
 
 ## 3. Strict Standard Output (`stdout`) Invariant

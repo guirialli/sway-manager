@@ -134,14 +134,14 @@ class PortalController:
     def _maybe_read_dmenu_stdin() -> str | None:
         """Return piped stdin content if any — used to detect dmenu mode.
 
-        When xdg-desktop-portal-wlr v0.8.x invokes the chooser with
-        chooser_type=dmenu, it writes a newline-separated list of source
-        labels on stdin and closes the pipe via fclose().  sys.stdin.read()
-        blocks until xdpw finishes writing and closes the write end, then
-        returns all the data at once.  An empty result means stdin was
-        closed without data (simple mode, /dev/null, etc.).  When stdin
-        is a TTY (interactive, test, daemon context), returns None so the
-        controller falls back to swaymsg/lswt discovery.
+        xdg-desktop-portal-wlr invokes a ``dmenu`` chooser with a
+        newline-separated list of outputs on stdin, then closes the pipe.
+        Version 0.7.x sends bare output names, while newer versions may send
+        ``Monitor:`` and ``Window:`` labels.  ``sys.stdin.read()`` blocks until
+        the backend finishes writing and closes the write end.  An empty result
+        means stdin was closed without data (simple mode, /dev/null, etc.).
+        When stdin is a TTY (interactive, test, daemon context), return None
+        so the controller falls back to swaymsg/lswt discovery.
         """
         if sys.stdin.isatty():
             return None
@@ -155,9 +155,10 @@ class PortalController:
     def _parse_dmenu_sources(
         content: str,
     ) -> tuple[list[PortalSource], list[PortalSource]]:
-        """Parse dmenu label list emitted by xdg-desktop-portal-wlr v0.8.x.
+        """Parse source labels emitted by xdg-desktop-portal-wlr dmenu mode.
 
-        Each line is either:
+        Version 0.7.x emits one bare output name per line.  Newer releases may
+        provide structured labels:
           Monitor: <name> <description>
           Window: <title> (<identifier>)
 
@@ -205,4 +206,16 @@ class PortalController:
                             raw_label=stripped,
                         )
                     )
+            else:
+                # xdg-desktop-portal-wlr 0.7.x passes only the output name
+                # (for example, ``HDMI-A-3``) to dmenu choosers.
+                monitors.append(
+                    PortalSource(
+                        id=stripped,
+                        source_type=PortalSourceType.MONITOR,
+                        label=stripped,
+                        details="",
+                        raw_label=stripped,
+                    )
+                )
         return monitors, windows
