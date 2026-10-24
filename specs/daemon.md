@@ -2,13 +2,16 @@
 
 ## 1. Overview & Objective
 
-The **SwayManager Daemon** (`SwayManagerDaemon`) is a persistent background service running in the user's Wayland desktop session. Its primary roles are:
-1. Maintaining a persistent Python runtime to eliminate cold-start overhead when handling CLI commands or Waybar status queries.
+> Implemented in Rust (`daemon/`, binary `sway-manager-daemon`). The Python
+> `SwayManagerDaemon`/`AsyncLogger` were removed; the socket protocol and
+> behavior below are the contract the Rust port upholds byte-for-byte.
+
+The **SwayManager Daemon** is a persistent background service running in the user's Wayland desktop session. Its primary roles are:
+1. Maintaining a persistent runtime to eliminate cold-start overhead when handling CLI commands or Waybar status queries.
 2. Listening for incoming commands over a Unix Domain Socket (`$XDG_RUNTIME_DIR/sway-manager-$UID.sock`).
 3. Serving synchronous CLI requests (e.g., Waybar status JSON payloads) directly in-process.
 4. Launching interactive GUI interfaces in isolated subprocesses (`SwayManagerGUI`) to keep the daemon clean and decoupled from persistent Wayland GUI surfaces.
 5. Managing memory through periodic garbage collection and native `malloc_trim` heap trimming.
-
 ---
 
 ## 2. Initialization & Lifecycle

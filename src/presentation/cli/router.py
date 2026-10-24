@@ -9,7 +9,7 @@ Uso:
   SwayManager <comando> [opções]
 
 Comandos Disponíveis:
-  daemon                   Inicia o servidor daemon persistente em background.
+  daemon                   Inicia o servidor daemon persistente em background (binário Rust).
   daemon log [-f|--follow] Exibe ou acompanha em tempo real os logs do dia (~/.config/sway-manager/logs/).
   settings, config         Abre o painel gráfico do Control Center (Configurações).
   monitor                  Abre a janela gráfica para alternar layouts de monitores.
@@ -28,6 +28,9 @@ Comandos Disponíveis:
   clipboard [clear|pin]    Abre o gerenciador de clipboard Wofi com suporte a miniaturas e favoritos.
   lock                     Bloqueia a tela usando swaylock customizado com wallpaper e tema.
   -h, --help               Exibe esta mensagem de ajuda.
+
+O daemon e o roteamento IPC vivem no binário Rust (`daemon/`); este
+módulo Python executa os comandos localmente (modo GUI/dev).
 """
     print(help_text.strip())
 
@@ -35,9 +38,11 @@ Comandos Disponíveis:
 def handle_daemon_log(args: list[str]):
     import os
     import time
-    from infrastructure.logging.async_logger import get_logger
+    from datetime import datetime
 
-    log_path = get_logger().get_today_log_path()
+    log_path = os.path.expanduser(
+        f"~/.config/sway-manager/logs/log-{datetime.now().strftime('%Y-%m-%d')}.txt"
+    )
     if not os.path.exists(log_path):
         print(f"Nenhum log registrado para hoje em: {log_path}")
         return
@@ -123,15 +128,20 @@ def run_cli():
         show_help()
         return
 
+    # O daemon agora é o binário Rust (`SwayManager daemon`, instalado em
+    # ~/.config/sway/bin/): este entrypoint Python só executa localmente.
+    # `daemon log` continua disponível aqui para leitura dos logs do dia.
     if app in ("daemon", "--daemon", "-d"):
         if len(args) > 2 and str(args[2]).lower() in ("log", "logs", "-l"):
             handle_daemon_log(args)
             return
 
-        from infrastructure.daemon.daemon_server import SwayManagerDaemon
-        daemon = SwayManagerDaemon()
-        daemon.start()
-        return
+        print(
+            "O daemon SwayManager é o binário Rust instalado em ~/.config/sway/bin/SwayManager.\n"
+            "Use 'SwayManager daemon' (binário) para iniciá-lo; este entrypoint Python executa apenas localmente.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     # Portal is invoked by xdg-desktop-portal-wlr as a subprocess; it must run
     # locally regardless of whether the daemon is active.
@@ -139,13 +149,6 @@ def run_cli():
         dispatch_cli_command(args)
         return
 
-    from infrastructure.daemon.daemon_client import SwayManagerClient
-    if not SwayManagerClient.send_command(args):
-        print(
-            "❌ Erro: O SwayManager Daemon não está em execução.\n"
-            "Inicie o serviço com 'SwayManager daemon' ou verifique a inicialização do Sway.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-
+    # Sem cliente IPC em Python: o binário Rust responde pelo socket.
+    # Aqui, executa localmente (comportamento do antigo `--standalone`).
+    dispatch_cli_command(args)

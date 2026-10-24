@@ -54,10 +54,11 @@ SwayManager is integrated into the dotfiles installer `install.sh`:
    ```bash
    pip install -r sway-manager/requirements.txt
    ```
-3. Run SwayManager main entry point:
+3. Run SwayManager (daemon Rust, via build):
    ```bash
-   python3 sway-manager/src/main.py --help
+   ./sway-manager/build.sh && ./sway-manager/out/main.dist/SwayManager --help
    ```
+   (O entrypoint Python `sway-manager/src/main.py` executa apenas localmente; o daemon é o binário Rust.)
 
 ---
 

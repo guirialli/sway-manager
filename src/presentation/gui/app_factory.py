@@ -1,11 +1,13 @@
 import gc
+import os
 import sys
 import ctypes
 from typing import Callable
-from infrastructure.daemon.server.config.gui_config import setup_qt_environment
 
 # Ensure Qt Wayland resilience flags are set before Qt initialization
-setup_qt_environment()
+# (antes em infrastructure.daemon.server.config.gui_config; o daemon agora é Rust).
+os.environ.setdefault("QT_WAYLAND_RECONNECT", "1")
+os.environ.setdefault("QT_QPA_PLATFORM", "wayland;xcb")
 
 
 from PySide6.QtCore import Qt
@@ -64,8 +66,7 @@ class ApplicationFactory:
             widget.activateWindow()
         except Exception as ex:
             import traceback
-            from infrastructure.logging.async_logger import get_logger
-            get_logger().error(f"Erro ao construir interface gráfica Qt: {ex}\n{traceback.format_exc().strip()}")
+            print(f"Erro ao construir interface gráfica Qt: {ex}\n{traceback.format_exc().strip()}", file=sys.stderr)
             if is_standalone:
                 sys.exit(1)
             return

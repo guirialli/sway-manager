@@ -45,8 +45,9 @@ class PortalController:
         cached = try_replay(monitors, windows)
         if cached is not None:
             return cached
-        from infrastructure.daemon.server.config.gui_config import setup_qt_environment
-        setup_qt_environment()
+        import os
+        os.environ.setdefault("QT_WAYLAND_RECONNECT", "1")
+        os.environ.setdefault("QT_QPA_PLATFORM", "wayland;xcb")
 
         from presentation.gui.styles import get_palette, get_stylesheet
         from PySide6.QtWidgets import QApplication

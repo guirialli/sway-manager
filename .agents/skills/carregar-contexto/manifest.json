@@ -1,0 +1,19 @@
+{
+  "author": "guirialli",
+  "description": "Carrega contexto no agente via scouts paralelos (task/scout): pesquisas web, leitura de specs/docs e varredura de diretórios inteiros. Use ao iniciar tarefa que exige contexto prévio, mapear domínio desconhecido ou reunir evidências antes de implementar, revisar ou documentar.",
+  "id": "guirialli/carregar-contexto",
+  "keywords": [
+    "contexto",
+    "context",
+    "scout",
+    "task",
+    "pesquisa",
+    "web-search",
+    "specs",
+    "mapeamento",
+    "briefing"
+  ],
+  "name": "carregar-contexto",
+  "schemaVersion": 1,
+  "version": "1.0.0"
+}

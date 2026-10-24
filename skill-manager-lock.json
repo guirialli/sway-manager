@@ -1,0 +1,16 @@
+{
+  "lockfileVersion": 1,
+  "registry": "https://skill-manager.separepramim.com.br",
+  "skills": {
+    "guirialli/carregar-contexto": {
+      "version": "1.0.0",
+      "gitlabProjectId": null,
+      "commitSha": "8e154a551f3a17f713ac0a43d3f2bbb4e523fb76",
+      "contentHash": "sha256:2dfdcf727a52ff6c8ab154959da6b444581e9371006938a62557fca2f25a9bcd",
+      "repository": {
+        "ssh": "git@gitlab-ssh.solucoessga.com.br:guirialli/carregar-contexto.git",
+        "https": "https://gitlab.solucoessga.com.br/guirialli/carregar-contexto.git"
+      }
+    }
+  }
+}

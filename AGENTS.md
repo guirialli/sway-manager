@@ -6,7 +6,9 @@
 defines entities and repository interfaces, `application/` contains use cases,
 `infrastructure/` integrates Sway, system tools, and persistence, and
 `presentation/` contains CLI handlers and PySide6 widgets/windows. Entry points
-are `src/main.py` (daemon/CLI) and `src/gui_main.py` (interactive GUI commands).
+are `src/main.py` (local CLI) and `src/gui_main.py` (interactive GUI commands).
+The persistent daemon is Rust in `daemon/` (`sway-manager-daemon` binary);
+the Python daemon was removed — `src/main.py` executes locally only.
 Put unit tests in `tests/test_<feature>.py`. Runtime dependencies are declared in
 `requirements.txt`; `udev/` holds the battery rule.
 
@@ -14,9 +16,9 @@ Put unit tests in `tests/test_<feature>.py`. Runtime dependencies are declared i
 
 - `python3 -m venv venv && source venv/bin/activate` creates a local environment.
 - `pip install -r requirements.txt` installs PySide6 and runtime dependencies.
-- `PYTHONPATH=src python3 -m unittest discover -s tests -v` runs the test suite.
-- `python3 src/main.py --help` exercises the CLI entry point.
-- `./build.sh` runs tests and produces standalone Nuitka binaries in `out/`.
+- `PYTHONPATH=src QT_QPA_PLATFORM=offscreen venv/bin/python -m unittest discover -s tests -v` runs the Python test suite.
+- `cargo test` (in `daemon/`) runs the Rust daemon test suite.
+- `./build.sh` runs both suites and produces `out/main.dist/` with the Rust `SwayManager` and Nuitka `SwayManagerGUI`.
 - `./install.sh --no-udev` installs the build locally without changing system
   udev rules. Do not run the default installer unless system installation is
   intended.

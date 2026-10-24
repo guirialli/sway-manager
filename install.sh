@@ -4,7 +4,7 @@ set -e
 echo "Compilando o projeto..."
 ./build.sh
 
-echo "Instalando o SwayManager e SwayManagerGUI..."
+echo "Instalando o SwayManager (daemon Rust) e SwayManagerGUI (Qt)..."
 rm -rf ~/.config/sway/bin/sway-manager
 rm -f ~/.config/sway/bin/SwayManager
 rm -f ~/.config/sway/bin/sway-manager
@@ -15,10 +15,11 @@ rm -f ~/.config/sway/bin/SwayManagerDaemon
 mkdir -p ~/.config/sway/bin/sway-manager
 cp -rf ./out/main.dist/* ~/.config/sway/bin/sway-manager/
 
+# SwayManager = daemon Rust (cargo build --release); SwayManagerGUI = Qt (Nuitka).
 ln -sf $HOME/.config/sway/bin/sway-manager/SwayManager $HOME/.config/sway/bin/SwayManager
-ln -sf $HOME/.config/sway/bin/sway-manager/sway-manager $HOME/.config/sway/bin/sway-manager
+ln -sf $HOME/.config/sway/bin/sway-manager/SwayManager $HOME/.config/sway/bin/sway-manager
 ln -sf $HOME/.config/sway/bin/sway-manager/SwayManagerGUI $HOME/.config/sway/bin/SwayManagerGUI
-ln -sf $HOME/.config/sway/bin/sway-manager/sway-manager-gui $HOME/.config/sway/bin/sway-manager-gui
+ln -sf $HOME/.config/sway/bin/sway-manager/SwayManagerGUI $HOME/.config/sway/bin/sway-manager-gui
 
 INSTALL_UDEV=true
 INSTALL_LSWT=false
