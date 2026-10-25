@@ -705,14 +705,14 @@ fn merge_ini_section(existing: &str, section: &str, entries: &[(&str, String)]) 
             out.push(line.to_string());
             continue;
         }
-        if in_section {
-            if let Some((key, _)) = trimmed.split_once('=') {
-                let key = key.trim();
-                if let Some(i) = entries.iter().position(|(k, _)| *k == key) {
-                    out.push(format!("{key} = {}", entries[i].1));
-                    written[i] = true;
-                    continue;
-                }
+        if in_section
+            && let Some((key, _)) = trimmed.split_once('=')
+        {
+            let key = key.trim();
+            if let Some(i) = entries.iter().position(|(k, _)| *k == key) {
+                out.push(format!("{key} = {}", entries[i].1));
+                written[i] = true;
+                continue;
             }
         }
         out.push(line.to_string());

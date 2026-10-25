@@ -28,6 +28,7 @@ All specifications herein are grounded directly in the implementation source cod
 ### Architectural Decision Records (`specs/adrs/`)
 - **[`adrs/0001-xdg-portal-integration.md`](./adrs/0001-xdg-portal-integration.md)**: XDG Desktop Portal integration & simple chooser strategy.
 - **[`adrs/0002-daemon-client-ipc-model.md`](./adrs/0002-daemon-client-ipc-model.md)**: Daemon-client Unix Domain Socket IPC & execution model.
+- **[`adrs/0004-polkit-agent.md`](./adrs/0004-polkit-agent.md)**: Native polkit agent (zbus backend + Tauri dialog).
 ### Subsystem Domains (`specs/domains/`)
 - **[`domains/media.md`](./domains/media.md)**: Screenshots (full, area, window) using `grim`, `slurp`, and the HiDPI freeze overlay.
 - **[`domains/display.md`](./domains/display.md)**: Monitor switching (PC only, duplicate, extend, monitor only) and backlight brightness control.
@@ -36,6 +37,7 @@ All specifications herein are grounded directly in the implementation source cod
 - **[`domains/menu.md`](./domains/menu.md)**: Application launcher, `.desktop` entry parser, icon resolution, and Wofi menu integration.
 - **[`domains/theme.md`](./domains/theme.md)**: GTK/Qt dark/light mode synchronization, Sway wallpaper management, and LightDM greeter configuration.
 - **[`domains/audio.md`](./domains/audio.md)**: Audio volume management, mute toggling, and Waybar status indicators.
+- **[`domains/polkit.md`](./domains/polkit.md)**: Native polkit authentication agent (D-Bus backend + Tauri auth dialog).
 
 ---
 

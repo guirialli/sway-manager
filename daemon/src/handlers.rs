@@ -35,8 +35,13 @@ pub trait SyncDeps: Send + Sync {
     fn wallpaper_dir_exists(&self, _path: &str) -> bool {
         false
     }
+    /// Cancel the in-flight polkit challenge, if any (no-op default).
+    fn cancel_polkit_challenge(&self) {}
+    /// One-line polkit agent state for `polkit status`.
+    fn polkit_status_line(&self) -> String {
+        crate::repos::polkit::status_text(false, None)
+    }
 }
-
 impl<D: SyncDeps> SyncDeps for std::sync::Arc<D> {
     fn runner(&self) -> &dyn crate::process::CommandRunner {
         (**self).runner()
@@ -67,6 +72,12 @@ impl<D: SyncDeps> SyncDeps for std::sync::Arc<D> {
     }
     fn wallpaper_dir_exists(&self, path: &str) -> bool {
         (**self).wallpaper_dir_exists(path)
+    }
+    fn cancel_polkit_challenge(&self) {
+        (**self).cancel_polkit_challenge();
+    }
+    fn polkit_status_line(&self) -> String {
+        (**self).polkit_status_line()
     }
 }
 
@@ -257,10 +268,22 @@ pub fn handle_sync(deps: &dyn SyncDeps, args: &[String]) -> (String, String) {
                 (String::new(), String::new())
             }
         },
+        "polkit" => match args.get(2).map(|sub| sub.to_lowercase()).as_deref() {
+            // `polkit status` prints one-line agent state synchronously
+            // (output ships back over the socket); `polkit dismiss`
+            // cancels the in-flight challenge with an immediate empty
+            // ack; bare `polkit` prints usage on stdout.
+            Some("status") => (deps.polkit_status_line(), String::new()),
+            Some("dismiss") => {
+                deps.cancel_polkit_challenge();
+                (String::new(), String::new())
+            }
+            _ => (String::from(crate::repos::polkit::USAGE), String::new()),
+        },
         "reload-cache" | "refresh-cache" => {
             let items = menu::SYSTEM_ACTIONS.len();
             (format!("{}\n", menu::reload_cache_message(items)), String::new())
         }
-        other => (String::new(), format!("Comando '{other}' {UNKNOWN_COMMAND_SUFFIX}")),
-    }
-}
+         other => (String::new(), format!("Comando '{other}' {UNKNOWN_COMMAND_SUFFIX}")),
+     }
+ }

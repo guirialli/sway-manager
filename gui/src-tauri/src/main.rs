@@ -11,13 +11,13 @@ mod tauri_runtime;
 
 use tauri::{Manager as _, WebviewUrl, WebviewWindowBuilder};
 
-const HELP: &str = "SwayManagerGUI - Módulo de Interface Gráfica\nUso: SwayManagerGUI <settings|monitor|wallpaper|osd> [opções]";
+const HELP: &str = "SwayManagerGUI - Módulo de Interface Gráfica\nUso: SwayManagerGUI <settings|monitor|wallpaper|osd|portal|polkit> [opções]";
 
 /// Comandos aceitos por `run_gui_app` (`src/gui_main.py:13-22`).
 fn is_gui_command(cmd: &str) -> bool {
     matches!(
         cmd,
-        "settings" | "config" | "config-center" | "monitor" | "wallpaper" | "osd" | "brilho" | "brightness" | "screenshot" | "portal"
+        "settings" | "config" | "config-center" | "monitor" | "wallpaper" | "osd" | "brilho" | "brightness" | "screenshot" | "portal" | "polkit"
     )
 }
 
@@ -34,6 +34,8 @@ fn prgname_for(cmd: &str) -> Option<&'static str> {
         "settings" | "config" | "config-center" => Some("sway-manager"),
         // `windows/wallpaper_picker.py:35`.
         "wallpaper" => Some("sway.apps.wallpaper-picker"),
+        // Contrato polkit (§3.4): `for_window [app_id="org.swaymanager.PolkitAuth"]`.
+        "polkit" => Some("org.swaymanager.PolkitAuth"),
         _ => None,
     }
 }
@@ -45,6 +47,7 @@ fn window_spec(cmd: &str, sub: Option<&str>) -> (&'static str, &'static str, f64
         "monitor" => ("routes/monitor.html", "Monitores", 520.0, 320.0, false),
         "wallpaper" => ("routes/wallpaper.html", "Seletor de Papel de Parede", 880.0, 560.0, false),
         "portal" => ("routes/portal.html", "Compartilhar Tela", 640.0, 480.0, false),
+        "polkit" => ("routes/polkit.html", "Autenticação necessária", 480.0, 320.0, false),
         "screenshot" if sub == Some("area") => ("routes/freeze.html", "Selecionar Área", 1920.0, 1080.0, true),
         "screenshot" => ("routes/freeze.html", "Captura de Tela", 1920.0, 1080.0, true),
         "brilho" | "brightness" if sub.is_none() || sub == Some("popup") => {
@@ -364,6 +367,86 @@ fn run_window(cmd: &str, sub: Option<&str>, action: Option<&str>) {
         .expect("falha ao iniciar o runtime Tauri");
 }
 
+/// Diálogo polkit (contrato §5): `SwayManagerGUI polkit --action-id …
+/// --message … --identities <csv> --pipe <fd> --events <fd>`.
+///
+/// Abre `routes/polkit.html?`action_id=&message=&identities= (via
+/// `percent_encode` — NUNCA o cookie, fora do argv por contrato); o pipe
+/// (fd 3) vira `State<Mutex<File>>` p/ `polkit_submit/cancel` e o fd de
+/// eventos (fd 4) é lido numa task assíncrona que re-emite cada linha BE→GUI
+/// como evento `polkit-event` p/ a janela `main` (ignoradas se malformadas).
+fn run_polkit() {
+    use std::io::BufRead as _;
+    use std::os::unix::io::FromRawFd as _;
+    use tauri::{Emitter as _, Manager as _};
+
+    let args: Vec<String> = std::env::args().skip(2).collect();
+    let launch = match sway_manager_gui::polkit_dialog::parse_polkit_args(&args) {
+        Ok(launch) => launch,
+        Err(usage) => {
+            eprintln!("{usage}");
+            std::process::exit(1);
+        }
+    };
+    // `File::from_raw_fd` toma posse do fd: fecha ao fim do processo.
+    // SAFETY: fds herdados do backend (contrato §5); `parse_polkit_args`
+    // garante `>= 0`, e fds inválidos falham abaixo (exit 1, fail-secure).
+    let write = unsafe { std::fs::File::from_raw_fd(launch.pipe_fd) };
+    let read = unsafe { std::fs::File::from_raw_fd(launch.events_fd) };
+    let query = format!(
+        "?action_id={}&message={}&identities={}",
+        percent_encode(&launch.action_id),
+        percent_encode(&launch.message),
+        percent_encode(&launch.identities.join(",")),
+    );
+    let state = sway_manager_gui::polkit_dialog::PolkitDialogState::initial(&launch);
+    let url = format!("routes/polkit.html{query}");
+    tauri::Builder::default()
+        .manage(state)
+        .manage(std::sync::Mutex::new(write))
+        .invoke_handler(tauri_runtime::invoke_handler())
+        .on_window_event(|window, event| {
+            if should_exit_on_window_event(event, window.app_handle().webview_windows().is_empty()) {
+                window.app_handle().exit(0);
+            }
+        })
+        .setup(move |app| {
+            let handle = app.handle().clone();
+            // Leitor do canal BE→GUI: termina em EOF/`completed` (o backend
+            // fecha o fd ao concluir). Linha malformada => ignorada.
+            tauri::async_runtime::spawn(async move {
+                let reader = std::io::BufReader::new(read);
+                for line in reader.lines() {
+                    let Ok(line) = line else { break };
+                    let Some(event) = sway_manager_gui::polkit_dialog::gui_event_from_json(&line) else {
+                        continue;
+                    };
+                    let done = matches!(event, sway_manager_gui::polkit_dialog::GuiEvent::Completed(_));
+                    let payload = event.payload();
+                    if handle.emit_to("main", "polkit-event", payload).is_err() {
+                        break;
+                    }
+                    if done {
+                        break;
+                    }
+                }
+            });
+            WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App(url.into()))
+                .title("Autenticação necessária")
+                .inner_size(480.0, 320.0)
+                .resizable(false)
+                .decorations(false)
+                .transparent(false)
+                .always_on_top(true)
+                .center()
+                .min_inner_size(480.0, 320.0)
+                .build()?;
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("falha ao iniciar o runtime Tauri");
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
@@ -421,8 +504,12 @@ fn main() {
         }
         return;
     }
+    // Desafio polkit: argv próprio (fd herdados), fora do `run_window`.
+    if cmd == "polkit" {
+        run_polkit();
+        return;
+    }
     // OSD singleton: se já há janela do kind, notifica (executa + atualiza
-    // in-place) e sai — sem spawnar outro WebKit.
     if let Some(kind) = osd_singleton::osd_kind(&cmd, sub.as_deref()) {
         // SAFETY: getuid é async-signal-safe, sem estado.
         let uid = unsafe { libc::getuid() };
@@ -442,7 +529,7 @@ mod tests {
 
     #[test]
     fn accepts_run_gui_app_commands() {
-        for cmd in ["settings", "config", "config-center", "monitor", "wallpaper", "osd", "brilho", "brightness", "screenshot"] {
+        for cmd in ["settings", "config", "config-center", "monitor", "wallpaper", "osd", "brilho", "brightness", "screenshot", "portal", "polkit"] {
             assert!(is_gui_command(cmd), "{cmd}");
         }
     }
@@ -463,6 +550,8 @@ mod tests {
         assert_eq!(window_spec("brilho", Some("popup")).0, "routes/brightness-popup.html");
         assert_eq!(window_spec("brilho", Some("up")).0, "routes/osd.html");
         assert_eq!(window_spec("screenshot", Some("area")).0, "routes/freeze.html");
+        assert_eq!(window_spec("portal", None).0, "routes/portal.html");
+        assert_eq!(window_spec("polkit", None), ("routes/polkit.html", "Autenticação necessária", 480.0, 320.0, false));
         assert!(!window_spec("settings", None).4);
         assert!(window_spec("screenshot", Some("area")).4);
     }
@@ -487,6 +576,7 @@ mod tests {
         assert_eq!(prgname_for("monitor"), None);
         assert_eq!(prgname_for("osd"), None);
         assert_eq!(prgname_for("portal"), None);
+        assert_eq!(prgname_for("polkit"), Some("org.swaymanager.PolkitAuth"));
         assert_eq!(prgname_for("screenshot"), None);
     }
 

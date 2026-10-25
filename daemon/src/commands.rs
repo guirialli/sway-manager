@@ -20,8 +20,8 @@ pub const INTERACTIVE_COMMANDS: &[&str] = &[
     "wallpaper",
     "osd",
     "brilho",
-    "brightness",
     "lock",
+    "polkit",
 ];
 
 /// Lowercase-normalized command name from `args` (`args[1]`), if present.
@@ -48,6 +48,14 @@ pub fn is_interactive_args(cmd: &str, args: &[String]) -> bool {
         && args.get(2).is_some_and(|sub| sub.eq_ignore_ascii_case("get"))
     {
         return false;
+    }
+    // `polkit status` and bare `polkit` print synchronously (their
+    // output ships back over the socket); `polkit agent` is standalone
+    // (never via the socket) and `polkit dismiss` acks immediately.
+    if cmd.eq_ignore_ascii_case("polkit") {
+        // Only `dismiss` acks immediately (interactive); `status`
+        // and bare `polkit` print synchronously via `handle_sync`.
+        return args.get(2).is_some_and(|sub| sub.eq_ignore_ascii_case("dismiss"));
     }
     true
 }

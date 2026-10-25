@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<!-- Diálogo de autenticação polkit (specs/domains/polkit.md §3.4/§5: GNOME HIG
+     + tokens Cyberpunk de `portal.html`): cadeado + título, mensagem da ação,
+     seletor de identidade (>1), senha com autofocus + toggle, Enter confirma /
+     Esc cancela, `<details>` técnico, banner de erro inline (sem recriar a
+     janela). Sem framework: `withGlobalTauri:true`. O cookie NUNCA chega aqui
+     (fora do argv por contrato). -->
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<style>
+  :root, [data-theme="dark"] {
+    --window-bg: #0D0B14;
+    --sidebar-bg: #13111C;
+    --card-bg: #191624;
+    --card-border: rgba(157, 78, 221, 0.25);
+    --text-primary: #F8F7FF;
+    --text-secondary: #B8B3D0;
+    --text-muted: #7A7596;
+    --accent: #9D4EDD;
+    --accent-hover: #C77DFF;
+    --accent-text: #FFFFFF;
+    --input-bg: #14121F;
+    --input-border: rgba(157, 78, 221, 0.35);
+    --button-bg: rgba(157, 78, 221, 0.12);
+    --button-hover: rgba(157, 78, 221, 0.25);
+    --button-border: rgba(199, 125, 255, 0.3);
+    --error-bg: rgba(255, 69, 58, 0.12);
+    --error-border: rgba(255, 69, 58, 0.5);
+    --error-text: #FF6961;
+    --info-bg: rgba(157, 78, 221, 0.12);
+    --info-border: rgba(199, 125, 255, 0.3);
+  }
+  [data-theme="light"] {
+    --window-bg: #F5F5F7;
+    --sidebar-bg: #E8E8ED;
+    --card-bg: #FFFFFF;
+    --card-border: rgba(0, 0, 0, 0.08);
+    --text-primary: #000000;
+    --text-secondary: #636366;
+    --text-muted: #8E8E93;
+    --accent: #007AFF;
+    --accent-hover: #0062CC;
+    --accent-text: #FFFFFF;
+    --input-bg: #FFFFFF;
+    --input-border: rgba(0, 0, 0, 0.15);
+    --button-bg: rgba(0, 0, 0, 0.04);
+    --button-hover: rgba(0, 0, 0, 0.08);
+    --button-border: rgba(0, 0, 0, 0.1);
+    --error-bg: rgba(255, 59, 48, 0.08);
+    --error-border: rgba(255, 59, 48, 0.4);
+    --error-text: #D70015;
+    --info-bg: rgba(0, 122, 255, 0.08);
+    --info-border: rgba(0, 122, 255, 0.25);
+  }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    background: var(--window-bg); color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  }
+  .root { padding: 24px 28px 16px; max-width: 480px; margin: 0 auto; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; }
+  .header { display: flex; gap: 14px; align-items: flex-start; }
+  .lock { width: 36px; height: 36px; flex-shrink: 0; color: var(--accent); margin-top: 2px; }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  .message { color: var(--text-secondary); margin: 0; font-size: 13px; }
+  .field label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+  .field select, .pwrow input {
+    width: 100%; box-sizing: border-box;
+    background: var(--input-bg); color: var(--text-primary);
+    border: 1px solid var(--input-border); border-radius: 8px;
+    padding: 8px 10px; font-size: 14px;
+  }
+  .field select:focus-visible, .pwrow input:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent-hover); outline-offset: 2px;
+  }
+  .pwrow { display: flex; gap: 8px; }
+  .pwrow input { flex: 1; min-width: 0; }
+  .banner { border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+  .banner.info { background: var(--info-bg); border: 1px solid var(--info-border); color: var(--text-secondary); }
+  .banner.error { background: var(--error-bg); border: 1px solid var(--error-border); color: var(--error-text); }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+  button.action {
+    border-radius: 8px; padding: 8px 22px; min-width: 100px; font-weight: bold; cursor: pointer;
+    background: var(--button-bg); color: var(--text-primary); border: 1px solid var(--button-border);
+  }
+  button.action:hover { background: var(--button-hover); border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-text); border: 1px solid var(--accent); }
+  button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  #toggle { min-width: 0; padding: 8px 12px; }
+  .tech { color: var(--text-muted); font-size: 12px; }
+  .tech summary { cursor: pointer; }
+  .tech code { display: block; margin-top: 4px; word-break: break-all; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+  <div class="root">
+    <div class="header">
+      <svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <rect x="4" y="11" width="16" height="10" rx="2"></rect>
+        <path d="M8 11V7a4 4 0 0 1 8 0v4"></path>
+      </svg>
+      <div>
+        <h1>Autenticação necessária</h1>
+        <p class="message" id="message"></p>
+      </div>
+    </div>
+    <div class="field" id="identity-wrap" hidden>
+      <label for="identity">Identidade</label>
+      <select id="identity"></select>
+    </div>
+    <div class="banner info" id="info" hidden></div>
+    <div class="banner error" id="error" role="alert" hidden></div>
+    <div class="field">
+      <label id="prompt" for="password">Senha</label>
+      <div class="pwrow">
+        <input type="password" id="password" autofocus autocomplete="current-password">
+        <button class="action" id="toggle" type="button" aria-pressed="false">Mostrar</button>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="action" id="cancel">Cancelar</button>
+      <button class="action primary" id="submit">Autenticar</button>
+    </div>
+    <details class="tech">
+      <summary>Detalhes técnicos</summary>
+      <code id="action-id"></code>
+    </details>
+  </div>
+<script>
+(function () {
+  'use strict';
+  // First paint síncrona via query (sem cookie por contrato); o backend
+  // confirma/completa via `polkit_state` + `polkit-event`.
+  var qs = new URLSearchParams(location.search);
+  var state = {
+    actionId: qs.get('action_id') || '',
+    message: qs.get('message') || '',
+    identities: (qs.get('identities') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean),
+    echo: false,
+    prompt: '',
+    selected: 0,
+  };
+
+  var messageEl = document.getElementById('message');
+  var actionEl = document.getElementById('action-id');
+  var identityWrap = document.getElementById('identity-wrap');
+  var identityEl = document.getElementById('identity');
+  var promptEl = document.getElementById('prompt');
+  var passwordEl = document.getElementById('password');
+  var toggleEl = document.getElementById('toggle');
+  var infoEl = document.getElementById('info');
+  var errorEl = document.getElementById('error');
+
+  // Contrato invoke: snake_case (`withGlobalTauri:true`).
+  function invoke(cmd, args) {
+    if (window.__TAURI__ && window.__TAURI__.core) return window.__TAURI__.core.invoke(cmd, args);
+    return Promise.reject(new Error('tauri indisponível'));
+  }
+
+  function showBanner(el, text) {
+    if (!text) { el.hidden = true; el.textContent = ''; return; }
+    el.textContent = text;
+    el.hidden = false;
+  }
+
+  function renderEcho() {
+    passwordEl.type = state.echo ? 'text' : 'password';
+    toggleEl.textContent = state.echo ? 'Ocultar' : 'Mostrar';
+    toggleEl.setAttribute('aria-pressed', String(state.echo));
+  }
+
+  // Identity do argv: `unix-user:<nome>` (único kind do BE hoje) — exibe só
+  // o nome. Sem retorno da escolha no transporte (§5): o BE aplica a senha à
+  // PRIMEIRA identity da lista.
+  function displayName(identity) {
+    return identity.indexOf('unix-user:') === 0 ? identity.slice('unix-user:'.length) : identity;
+  }
+
+  function renderIdentities() {
+    identityEl.innerHTML = '';
+    state.identities.forEach(function (name, index) {
+      var opt = document.createElement('option');
+      opt.value = String(index);
+      opt.textContent = displayName(name);
+      identityEl.append(opt);
+    });
+    identityEl.value = String(state.selected);
+    identityWrap.hidden = state.identities.length < 2;
+  }
+
+  function applySnapshot(snap) {
+    if (!snap) return;
+    if (typeof snap.message === 'string' && snap.message) state.message = snap.message;
+    if (typeof snap.action_id === 'string') state.actionId = snap.action_id;
+    if (Array.isArray(snap.identities) && snap.identities.length > 0) state.identities = snap.identities;
+    if (typeof snap.selected === 'number') state.selected = snap.selected;
+    if (typeof snap.echo === 'boolean') state.echo = snap.echo;
+    if (typeof snap.prompt === 'string' && snap.prompt) state.prompt = snap.prompt;
+    messageEl.textContent = state.message;
+    actionEl.textContent = state.actionId;
+    promptEl.textContent = state.prompt || 'Senha';
+    renderEcho();
+    renderIdentities();
+    showBanner(infoEl, snap.info || '');
+    showBanner(errorEl, snap.error || '');
+  }
+
+  // Evento BE→GUI (`polkit-event`, mesmo formato do fio §5). Erro atualiza
+  // o banner inline sem recriar a janela; `completed` fecha o diálogo.
+  function applyEvent(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    if (payload.completed !== undefined) { window.close(); return; }
+    if (typeof payload.prompt === 'string') {
+      state.prompt = payload.prompt;
+      promptEl.textContent = state.prompt || 'Senha';
+    }
+    if (typeof payload.echo === 'boolean') { state.echo = payload.echo; renderEcho(); }
+    if (typeof payload.info === 'string') showBanner(infoEl, payload.info);
+    if (typeof payload.error === 'string') {
+      showBanner(errorEl, payload.error);
+      passwordEl.value = '';
+      passwordEl.focus();
+    }
+  }
+
+  async function submit() {
+    var password = passwordEl.value;
+    // Invariante PAM: campo single-line, `\n` nunca é enviado (o BE rejeita).
+    if (password.indexOf('\n') !== -1) return;
+    try {
+      await invoke('polkit_submit', { password: password });
+    } catch (err) {
+      showBanner(errorEl, String((err && err.message) || err || 'Falha ao enviar a senha'));
+    } finally {
+      // INV-POLKIT-4: limpa o campo imediatamente após o invoke.
+      passwordEl.value = '';
+    }
+  }
+
+  async function cancel() {
+    try {
+      await invoke('polkit_cancel');
+    } catch (_) {
+      window.close(); // backend já encerrou; garante o fechamento
+    }
+  }
+
+  identityEl.addEventListener('change', function () {
+    state.selected = parseInt(identityEl.value, 10) || 0;
+  });
+  toggleEl.addEventListener('click', function () {
+    state.echo = !state.echo;
+    renderEcho();
+    passwordEl.focus();
+  });
+  document.getElementById('submit').addEventListener('click', submit);
+  document.getElementById('cancel').addEventListener('click', cancel);
+  passwordEl.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') { event.preventDefault(); submit(); }
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') { event.preventDefault(); cancel(); }
+  });
+
+  if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
+    window.__TAURI__.event.listen('polkit-event', function (event) { applyEvent(event.payload); }).catch(function () {});
+  }
+
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+
+  messageEl.textContent = state.message;
+  actionEl.textContent = state.actionId;
+  renderIdentities();
+  invoke('polkit_state').then(applySnapshot).catch(function () {});
+  passwordEl.focus();
+})();
+</script>
+</body>
+</html>

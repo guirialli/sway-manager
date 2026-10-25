@@ -7,7 +7,9 @@
 pub mod commands;
 pub mod config_center;
 pub mod mon_wall;
+pub mod polkit_dialog;
 pub mod portal_freeze;
+pub use polkit_dialog::{GuiEvent, PolkitDialogState, PolkitLaunch, cancel_line, gui_event_from_json, identity_display, parse_polkit_args, submit_line};
 pub use commands::{brightness_osd, volume_osd, BrightnessAction, VolumeAction, VolumeOsd};
 pub use config_center::{appearance_apply, appearance_page, battery_toggle, current_wallpaper, idle_page, idle_toggle, lightdm_page, lightdm_save, monitors_apply, monitors_page, monitors_set_screenshot_folder, power_apply, power_page, select_page, theme_toggle, wallpaper_images, wallpaper_page, wallpaper_page_in, wallpaper_set_folder, WallpaperImage, WallpaperPage};
 pub use mon_wall::{DisplayMode, MonitorLayouts, WallpaperEntry, monitor_apply, monitor_layouts, monitor_reload, wallpaper_apply, wallpaper_apply_to, wallpaper_default_folder, wallpaper_list, wallpaper_list_in};

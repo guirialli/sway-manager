@@ -366,6 +366,7 @@ struct Deps {
     menu_calls: Arc<Mutex<Vec<Option<String>>>>,
     clipboard_calls: Arc<Mutex<Vec<Option<String>>>>,
     spawned_gui: Arc<Mutex<Vec<Vec<String>>>>,
+    polkit_cancels: Arc<Mutex<usize>>,
 }
 
 impl SyncDeps for Deps {
@@ -396,6 +397,9 @@ impl SyncDeps for Deps {
     fn spawn_gui(&self, args: &[String]) {
         self.spawned_gui.lock().unwrap().push(args.to_vec());
     }
+    fn cancel_polkit_challenge(&self) {
+        *self.polkit_cancels.lock().unwrap() += 1;
+    }
 }
 
 const CTL: &str = "/sys/devices/platform/ideapad_acpi/conservation_mode";
@@ -410,6 +414,7 @@ fn parity_deps(runner: ProcessFake) -> Deps {
         menu_calls: Arc::new(Mutex::new(Vec::new())),
         clipboard_calls: Arc::new(Mutex::new(Vec::new())),
         spawned_gui: Arc::new(Mutex::new(Vec::new())),
+        polkit_cancels: Arc::new(Mutex::new(0)),
     }
 }
 
@@ -544,6 +549,84 @@ async fn server_interactive_gui_acks_immediately() {
     assert!(output.stdout.is_empty() && output.stderr.is_empty());
 }
 
+#[tokio::test]
+async fn server_polkit_status_round_trip() {
+    // `polkit status` is sync: usage-free one-liner ships back.
+    let (ok, output) = round_trip(&argv(&["SwayManager", "polkit", "status"])).await;
+    assert!(ok);
+    assert_eq!(output.stdout, "polkit: not-registered\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[tokio::test]
+async fn server_polkit_bare_prints_usage() {
+    let (ok, output) = round_trip(&argv(&["SwayManager", "polkit"])).await;
+    assert!(ok);
+    assert!(output.stdout.starts_with("Uso: SwayManager polkit"));
+    assert!(output.stderr.is_empty());
+}
+
+#[tokio::test]
+async fn server_polkit_dismiss_acks_empty() {
+    // `polkit dismiss` is interactive: immediate empty ack.
+    let (ok, output) = round_trip(&argv(&["SwayManager", "polkit", "dismiss"])).await;
+    assert!(ok);
+    assert!(output.stdout.is_empty() && output.stderr.is_empty());
+}
+
+#[test]
+fn polkit_branches_via_real_handlers() {
+    let deps = parity_deps(ProcessFake::new());
+    let (out, err) = handle_sync(&deps, &argv(&["SwayManager", "polkit", "status"]));
+    assert_eq!(out, "polkit: not-registered\n");
+    assert!(err.is_empty());
+    let (out, err) = handle_sync(&deps, &argv(&["SwayManager", "polkit"]));
+    assert!(out.starts_with("Uso: SwayManager polkit"));
+    assert!(err.is_empty());
+    let (out, err) = handle_sync(&deps, &argv(&["SwayManager", "polkit", "dismiss"]));
+    assert!(out.is_empty() && err.is_empty());
+    assert_eq!(*deps.polkit_cancels.lock().unwrap(), 1);
+}
+
+#[test]
+fn polkit_status_uses_deps_line() {
+    // `polkit status` must ship the deps-provided one-liner (the daemon
+    // plugs the live `AgentHandle` in; the default prints not-registered).
+    struct Registered(Deps);
+    impl SyncDeps for Registered {
+        fn runner(&self) -> &dyn CommandRunner {
+            self.0.runner()
+        }
+        fn battery_fs(&self) -> &dyn battery::BatteryFs {
+            self.0.battery_fs()
+        }
+        fn theme_fs(&self) -> &dyn theme::ThemeFs {
+            self.0.theme_fs()
+        }
+        fn theme_applier(&self) -> &dyn theme::ThemeApplier {
+            self.0.theme_applier()
+        }
+        fn lock_ctx(&self) -> &dyn lock::LockContext {
+            self.0.lock_ctx()
+        }
+        fn home(&self) -> &str {
+            self.0.home()
+        }
+        fn run_menu(&self, filter: Option<&str>) {
+            self.0.run_menu(filter);
+        }
+        fn run_clipboard(&self, action: Option<&str>) {
+            self.0.run_clipboard(action);
+        }
+        fn polkit_status_line(&self) -> String {
+            String::from("polkit: registered (session 8)\n")
+        }
+    }
+    let deps = Registered(parity_deps(ProcessFake::new()));
+    let (out, err) = handle_sync(&deps, &argv(&["SwayManager", "polkit", "status"]));
+    assert_eq!(out, "polkit: registered (session 8)\n");
+    assert!(err.is_empty());
+}
 #[tokio::test]
 async fn server_no_command_acks() {
     let (ok, _) = round_trip(&argv(&["SwayManager"])).await;

@@ -32,6 +32,7 @@ const DAEMON_DOWN_MSG: &str = "❌ Erro: O SwayManager Daemon não está em exec
 struct LiveDeps {
     runner: SystemRunner,
     theme_fs: LiveThemeFs,
+    polkit: Option<std::sync::Arc<sway_manager_daemon::repos::polkit::AgentHandle>>,
 }
 
 #[derive(Debug, Default)]
@@ -145,11 +146,17 @@ impl SyncDeps for LiveDeps {
         let icon_ref = &icon;
         let list = || {
             let favorites = clipboard_exec::load_favorites_pub(&home);
-            clipboard_exec::list_items(runner, favorites, &|_| false)
+            clipboard_exec::list_items(runner, favorites, &|id| {
+                // Thumbnail per image entry: raw decode → 64px PNG cache.
+                // `None` (undecodable) falls back to the generic copy icon.
+                let (status, bytes) = runner.run_bytes("cliphist", &["decode", id]);
+                (status == 0).then(|| clipboard_exec::write_thumb(&home, id, &bytes)).flatten()
+            })
         };
         let decode = |id: &str| {
-            let output = runner.run("cliphist", &["decode", id]);
-            output.succeeded().then(|| output.stdout.into_bytes())
+            // Raw bytes (no UTF-8 round-trip): images survive intact.
+            let (status, bytes) = runner.run_bytes("cliphist", &["decode", id]);
+            (status == 0).then_some(bytes)
         };
         let select = |items: &[clipboard_exec::ClipItem], prompt: &str| {
             clipboard_exec::launch_clipboard_menu(runner, &home, icon_ref, items, prompt)
@@ -161,6 +168,17 @@ impl SyncDeps for LiveDeps {
     }
     fn wallpaper_dir_exists(&self, path: &str) -> bool {
         std::path::Path::new(path).is_dir()
+    }
+    fn cancel_polkit_challenge(&self) {
+        if let Some(handle) = &self.polkit {
+            handle.cancel_current();
+        }
+    }
+    fn polkit_status_line(&self) -> String {
+        match &self.polkit {
+            Some(handle) => handle.status_line(),
+            None => sway_manager_daemon::repos::polkit::status_text(false, None),
+        }
     }
 }
 
@@ -323,9 +341,36 @@ async fn run_daemon() -> i32 {
     logger.info(&cache_msg);
 
     refresh_lock_state();
+    // Resident polkit agent: registers this session on the system bus.
+    // Spawned detached (its own task); `polkit dismiss` cancels through
+    // the shared handle. Failures only log — the daemon serves sockets
+    // regardless (polkit challenges then error `NoAgentsAvailable`).
+    let polkit_handle =
+        std::sync::Arc::new(sway_manager_daemon::repos::polkit::AgentHandle::default());
+    {
+        let handle = polkit_handle.clone();
+        let log = logger.clone();
+        tokio::spawn(async move {
+            use sway_manager_daemon::repos::polkit::agent;
+            let gui_bin = std::env::var_os("SWAY_MANAGER_GUI").unwrap_or_else(|| {
+                std::ffi::OsString::from(
+                    sway_manager_daemon::binary::binary_command("SwayManagerGUI")
+                        .into_iter()
+                        .next()
+                        .unwrap_or_else(|| "SwayManagerGUI".to_string()),
+                )
+            });
+            if let Err(err) = agent::serve((*handle).clone(), gui_bin).await {
+                let msg = format!("polkit agent indisponível: {err}");
+                eprintln!("{msg}");
+                log.error(&msg);
+            }
+        });
+    }
     let deps = Arc::new(LiveDeps {
         runner: SystemRunner,
         theme_fs: LiveThemeFs,
+        polkit: Some(polkit_handle),
     });
     let runner = SyncCliRunner::new(deps);
     if let Err(err) = server::serve_with(socket_path(), listener, runner, logger).await {
@@ -407,6 +452,18 @@ fn local_invoke(args: &[String], stdout: &mut dyn Output) -> i32 {
         }
         return 0;
     }
+    if cmd == "polkit" {
+        // `polkit status` prints synchronously even offline (paridade
+        // `handle_sync`); `polkit agent` runs foreground standalone.
+        let sub = args.get(2).map(|sub| sub.to_lowercase()).unwrap_or_default();
+        if sub == "status" {
+            // Offline: no registration info without the daemon.
+            stdout.print_stdout(&sway_manager_daemon::repos::polkit::status_text(false, None));
+            return 0;
+        }
+        // `polkit agent` is standalone (never via socket); handled at
+        // the `local_invoke` call-site below to keep this fn sync.
+    }
     if cmd == "osd" && args.get(2).is_none() {
         // Mirrors `handle_osd`: bare `osd` prints the notice on stdout.
         stdout.print_stdout("OSD não informado!\n");
@@ -438,6 +495,13 @@ async fn main() {
             }
         }
         "portal" => std::process::exit(local_invoke(&args, &mut Stdio)),
+        "polkit" if args.get(2).is_some_and(|sub| sub.eq_ignore_ascii_case("agent")) => {
+            // Foreground standalone agent (never via the daemon
+            // socket): minimal async adaptation at the call-site.
+            std::process::exit(
+                sway_manager_daemon::repos::polkit::agent::run_foreground().await,
+            );
+        }
         _ => {
             if send_command(&args).await {
             } else {

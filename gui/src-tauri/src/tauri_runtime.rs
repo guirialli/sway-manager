@@ -406,6 +406,49 @@ fn screenshot_window() -> Result<String, String> {
     portal_freeze::screenshot_window(&runner(), &home())
 }
 
+// --- Polkit (routes/polkit.html) ---
+
+#[tauri::command]
+fn polkit_state(state: tauri::State<sway_manager_gui::polkit_dialog::PolkitDialogState>) -> Result<sway_manager_gui::polkit_dialog::PolkitDialogState, String> {
+    Ok(state.inner().clone())
+}
+
+#[tauri::command]
+fn polkit_submit(password: String, pipe: tauri::State<std::sync::Mutex<std::fs::File>>) -> Result<(), String> {
+    use std::io::Write as _;
+    // INV-POLKIT-4: nenhuma cópia do segredo além de `buf` — `submit_line`
+    // recebe `&str` que referencia `buf`, e `line` carrega só o JSON já
+    // serializado (que também é zerado abaixo antes do drop).
+    let mut buf = password.into_bytes();
+    let result = (|| {
+        let text = std::str::from_utf8(&buf).map_err(|_| "polkit: senha inválida".to_string())?;
+        let mut line = sway_manager_gui::polkit_dialog::submit_line(text)
+            .ok_or_else(|| "polkit: senha com quebra de linha rejeitada".to_string())?
+            .into_bytes();
+        let mut pipe = pipe.inner().lock().map_err(|err| format!("polkit: pipe bloqueado: {err}"))?;
+        let wrote = pipe.write_all(&line).and_then(|()| pipe.flush()).map_err(|err| format!("polkit: escrita no pipe: {err}"));
+        for byte in line.iter_mut() {
+            *byte = 0;
+        }
+        wrote
+    })();
+    for byte in buf.iter_mut() {
+        *byte = 0;
+    }
+    drop(buf);
+    result
+}
+
+#[tauri::command]
+fn polkit_cancel(pipe: tauri::State<std::sync::Mutex<std::fs::File>>, app: tauri::AppHandle) {
+    use std::io::Write as _;
+    if let Ok(mut pipe) = pipe.inner().lock() {
+        let _ = pipe.write_all(sway_manager_gui::polkit_dialog::cancel_line().as_bytes());
+        let _ = pipe.flush();
+    }
+    app.exit(0);
+}
+
 /// Todos os comandos invocáveis pelo frontend (`invoke_handler`).
 pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool {
     tauri::generate_handler![
@@ -449,5 +492,8 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool {
         screenshot_compose_save,
         screenshot_full,
         screenshot_window,
+        polkit_state,
+        polkit_submit,
+        polkit_cancel,
     ]
 }
