@@ -14,7 +14,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use sway_manager_daemon::process::CommandRunner;
-use sway_manager_daemon::repos::{portal, screenshot};
+use sway_manager_daemon::domains::system::{portal, screenshot};
 
 /// Lado mínimo aceito (Qt: `MIN_SELECTION_SIZE = 6`).
 pub const MIN_SELECTION_SIZE: i32 = 6;
@@ -559,8 +559,8 @@ pub fn screenshot_save_png(
         return Err("conteúdo não é PNG".to_string());
     }
     let folder = if folder.is_empty() {
-        let saved = sway_manager_daemon::repos::app_config::get_setting(
-            &sway_manager_daemon::repos::app_config::default_config_path(home),
+        let saved = sway_manager_daemon::domains::settings::app_config::get_setting(
+            &sway_manager_daemon::domains::settings::app_config::default_config_path(home),
             "screenshot_folder",
         )
         .and_then(|v| v.as_str().map(str::to_string));
@@ -581,8 +581,8 @@ pub fn screenshot_save_png(
 
 /// Captura tela cheia sem janela (`grim <dst>` + publish).
 pub fn screenshot_full(runner: &dyn CommandRunner, home: &str) -> Result<String, String> {
-    let saved = sway_manager_daemon::repos::app_config::get_setting(
-        &sway_manager_daemon::repos::app_config::default_config_path(home),
+    let saved = sway_manager_daemon::domains::settings::app_config::get_setting(
+        &sway_manager_daemon::domains::settings::app_config::default_config_path(home),
         "screenshot_folder",
     )
     .and_then(|v| v.as_str().map(str::to_string));
@@ -601,8 +601,8 @@ pub fn screenshot_full(runner: &dyn CommandRunner, home: &str) -> Result<String,
 
 /// Captura a janela focada sem overlay (`swaymsg get_tree` + `grim -g`).
 pub fn screenshot_window(runner: &dyn CommandRunner, home: &str) -> Result<String, String> {
-    let saved = sway_manager_daemon::repos::app_config::get_setting(
-        &sway_manager_daemon::repos::app_config::default_config_path(home),
+    let saved = sway_manager_daemon::domains::settings::app_config::get_setting(
+        &sway_manager_daemon::domains::settings::app_config::default_config_path(home),
         "screenshot_folder",
     )
     .and_then(|v| v.as_str().map(str::to_string));
@@ -684,8 +684,8 @@ pub fn screenshot_compose_save(
         image::imageops::overlay(&mut canvas, &view, dx as i64, dy as i64);
     }
     let folder = if folder.is_empty() {
-        let saved = sway_manager_daemon::repos::app_config::get_setting(
-            &sway_manager_daemon::repos::app_config::default_config_path(home),
+        let saved = sway_manager_daemon::domains::settings::app_config::get_setting(
+            &sway_manager_daemon::domains::settings::app_config::default_config_path(home),
             "screenshot_folder",
         )
         .and_then(|v| v.as_str().map(str::to_string));

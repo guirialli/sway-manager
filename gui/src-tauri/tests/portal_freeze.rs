@@ -2,7 +2,7 @@
 //! `tests/test_portal.py` (dmenu parse, validate) +
 //! `tests/test_freeze_selection_overlay.py` (SelectionState, compose multimonitor).
 
-#[path = "../src/portal_freeze.rs"]
+#[path = "../src/domains/system/portal_freeze.rs"]
 mod portal_freeze;
 use std::collections::HashMap;
 
@@ -231,8 +231,8 @@ fn compose_returns_none_without_intersection() {
 
 #[test]
 fn selection_roundtrips_through_daemon_model() {
-    let daemon = sway_manager_daemon::repos::portal::PortalResult::new(
-        sway_manager_daemon::repos::portal::SourceType::Window,
+    let daemon = sway_manager_daemon::domains::system::portal::PortalResult::new(
+        sway_manager_daemon::domains::system::portal::SourceType::Window,
         "abc123",
     );
     let selection = PortalSelection::from_daemon(&daemon);

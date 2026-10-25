@@ -68,7 +68,7 @@ Riscos assumidos (ver `specs/tauri-v2.md` §6):
 ## Fase 1 executada (2026-10-26)
 
 Crate `gui/src-tauri` (`sway-manager-gui`): `commands::{volume_osd, brightness_osd}`
-sobre `sway_manager_daemon::repos::audio`, 6 testes Rust verdes, clippy 0.
-Frontend: `gui/src/routes/osd.html` (tokens CSS dark/light, sem framework).
+sobre `sway_manager_daemon::domains::osd::audio`, 6 testes Rust verdes, clippy 0.
+Frontend: `gui/src/routes/osd/osd.html` (tokens CSS dark/light, sem framework).
 Fase 2 = `tauri = "2"` + `invoke_handler` + `WEBKIT_DISABLE_DMABUF_RENDERER=1`
 (requer `libwebkit2gtk-4.1-dev` no host).

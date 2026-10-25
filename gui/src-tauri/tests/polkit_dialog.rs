@@ -1,6 +1,6 @@
 //! Testes do diálogo polkit — oráculo: `specs/domains/polkit.md` §5.
 
-use sway_manager_gui::polkit_dialog::{
+use sway_manager_gui::domains::system::polkit_dialog::{
     GuiEvent, POLKIT_USAGE, cancel_line, gui_event_from_json, parse_polkit_args, submit_line,
 };
 
@@ -130,7 +130,7 @@ fn submit_cancel_framing_is_byte_exact() {
 fn html_invokes_match_registered_commands() {
     // O `invoke_handler` registra `polkit_state|submit|cancel`; o HTML deve
     // invocar exatamente esses nomes (+ ouvir `polkit-event`).
-    const HTML: &str = include_str!("../../src/routes/polkit.html");
+    const HTML: &str = include_str!("../../src/routes/system/polkit.html");
     for name in ["polkit_state", "polkit_submit", "polkit_cancel", "polkit-event"] {
         assert!(HTML.contains(name), "{name}");
     }

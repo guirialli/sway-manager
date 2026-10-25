@@ -1,14 +1,14 @@
 //! Testes do ConfigCenter — oráculo: `tests/test_gui_windows.py::ConfigCenterTestCase`.
 //!
-//! `#[path]` próprio p/ compilar com ou sem `pub mod config_center` em `lib.rs`
+//! `#[path = "../src/config_center.rs"]
 //! (registro pedido ao Main via `agent://all`).
-#[path = "../src/config_center.rs"]
+#[path = "../src/domains/settings/config_center.rs"]
 mod config_center;
 
 use std::collections::{BTreeMap, HashMap};
 
 use sway_manager_daemon::process::{CmdOutput, CommandRunner, FakeRunner};
-use sway_manager_daemon::repos::{appearance, battery, lightdm, theme};
+use sway_manager_daemon::domains::{settings::{appearance, lightdm, theme}, system::battery};
 use config_center::{
     appearance_apply, appearance_page, battery_toggle, idle_page, idle_toggle, lightdm_page,
     lightdm_save, monitors_apply, monitors_page, monitors_set_screenshot_folder, power_apply,

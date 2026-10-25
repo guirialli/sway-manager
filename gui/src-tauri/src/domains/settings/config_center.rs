@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use sway_manager_daemon::process::CommandRunner;
-use sway_manager_daemon::repos::{appearance, app_config, battery, display, idle, lightdm, power, screenshot, theme, wallpaper, wallpaper_thumbs};
+use sway_manager_daemon::domains::{settings::{appearance, app_config, display, lightdm, theme, wallpaper, wallpaper_thumbs}, system::{battery, idle, power, screenshot}};
 
 /// Itens da sidebar, paridade `setup_ui` (`config_center.py:108-115`):
 /// rótulos PT-BR idênticos ao Qt, `UserRole` = índice da página.
@@ -202,7 +202,7 @@ pub struct WallpaperPage {
 
 /// Paridade `create_wallpaper_page` + `pasta_imagens` (`:76,:303-357`).
 ///
-/// Thumbs pré-processados pelo daemon (`repos::wallpaper_thumbs`): a GUI só
+/// Thumbs pré-processados pelo daemon (`domains::settings::wallpaper_thumbs`): a GUI só
 /// repassa a data URL pronta para exibir.
 ///
 /// Na fase Tauri: `#[tauri::command] fn wallpaper_page()`.

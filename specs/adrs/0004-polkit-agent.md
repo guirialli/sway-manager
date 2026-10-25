@@ -42,14 +42,14 @@ mapeou o protocolo exato.
 
 Implementar o agente em Rust puro:
 
-- **Backend** (`daemon/src/repos/polkit.rs`): objeto D-Bus no system bus via
+- **Backend** (`daemon/src/domains/system/polkit.rs`): objeto D-Bus no system bus via
   `zbus 5` (interface `org.freedesktop.PolicyKit1.AuthenticationAgent` em
   `/org/swaymanager/PolicyKit1/AuthenticationAgent`), registro na authority com
   subject `unix-session`, driver de sessão PAM (socket
   `/run/polkit/agent-helper.socket` → fallback spawn setuid), spawn da GUI por
   desafio, flag `m_inProgress` (1 desafio por vez), `prctl(PR_SET_DUMPABLE, 0)`,
   `zeroize` de segredos, veto por `LockedHint`.
-- **Frontend** (`SwayManagerGUI polkit` + `routes/polkit.html`): processo
+- **Frontend** (`SwayManagerGUI polkit` + `routes/system/polkit.html`): processo
   efêmero por desafio, comandos `polkit_state`/`polkit_submit`/`polkit_cancel`,
   transporte v1 por pipes herdados (JSON lines), cookie nunca cruza para a GUI.
 - **CLI**: `polkit status` (sync), `polkit dismiss` (interativo), `polkit agent`

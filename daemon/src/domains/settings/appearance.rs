@@ -13,7 +13,7 @@
 //! `~/.gtkrc-2.0`, cursor `index.theme`, notify
 //! `"Aparência aplicada!\nTema: {gtk}"`).
 //! The kitty/kvantum/plasma path (`_apply_qt_theme`, used by `toggle`)
-//! already lives in [`crate::repos::theme`].
+//! already lives in [`crate::domains::settings::theme`].
 
 use std::collections::{BTreeMap, BTreeSet};
 

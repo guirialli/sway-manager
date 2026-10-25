@@ -8,7 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 use sway_manager_daemon::process::CommandRunner;
-use sway_manager_daemon::repos::audio::{
+use sway_manager_daemon::domains::osd::audio::{
     adjust_volume, brightness_percent, change_brightness, get_volume_state,
 };
 
@@ -62,7 +62,7 @@ pub fn volume_osd(
     Ok(VolumeOsd {
         percentage: state.percentage,
         is_muted: state.is_muted,
-        icon: sway_manager_daemon::repos::audio::volume_icon(&state),
+        icon: sway_manager_daemon::domains::osd::audio::volume_icon(&state),
     })
 }
 

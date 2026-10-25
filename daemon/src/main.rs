@@ -13,7 +13,7 @@ use sway_manager_daemon::client::{Output, Stdio, send_command, send_command_to};
 use sway_manager_daemon::handlers::SyncDeps;
 use sway_manager_daemon::logging;
 use sway_manager_daemon::process::{CommandRunner, SystemRunner};
-use sway_manager_daemon::repos::{battery, lock, theme};
+use sway_manager_daemon::domains::{settings::theme, system::{battery, lock}};
 use sway_manager_daemon::runtime;
 use sway_manager_daemon::server::{self, SyncCliRunner};
 use sway_manager_daemon::socket::socket_path;
@@ -32,7 +32,7 @@ const DAEMON_DOWN_MSG: &str = "❌ Erro: O SwayManager Daemon não está em exec
 struct LiveDeps {
     runner: SystemRunner,
     theme_fs: LiveThemeFs,
-    polkit: Option<std::sync::Arc<sway_manager_daemon::repos::polkit::AgentHandle>>,
+    polkit: Option<std::sync::Arc<sway_manager_daemon::domains::system::polkit::AgentHandle>>,
 }
 
 #[derive(Debug, Default)]
@@ -121,7 +121,7 @@ impl SyncDeps for LiveDeps {
         &HOME
     }
     fn run_menu(&self, filter: Option<&str>) {
-        use sway_manager_daemon::repos::{desktop_index, icons, menu_exec};
+        use sway_manager_daemon::domains::{menus::{desktop_index, menu_exec}, system::icons};
         let home = self.home().to_string();
         let items = desktop_index::load_menu_items(&home);
         let runner = &self.runner;
@@ -138,7 +138,7 @@ impl SyncDeps for LiveDeps {
         );
     }
     fn run_clipboard(&self, action: Option<&str>) {
-        use sway_manager_daemon::repos::{clipboard_exec, icons};
+        use sway_manager_daemon::domains::{menus::clipboard_exec, system::icons};
         let home = self.home().to_string();
         let runner = &self.runner;
         let home_clone = home.clone();
@@ -177,7 +177,7 @@ impl SyncDeps for LiveDeps {
     fn polkit_status_line(&self) -> String {
         match &self.polkit {
             Some(handle) => handle.status_line(),
-            None => sway_manager_daemon::repos::polkit::status_text(false, None),
+            None => sway_manager_daemon::domains::system::polkit::status_text(false, None),
         }
     }
 }
@@ -346,12 +346,12 @@ async fn run_daemon() -> i32 {
     // the shared handle. Failures only log — the daemon serves sockets
     // regardless (polkit challenges then error `NoAgentsAvailable`).
     let polkit_handle =
-        std::sync::Arc::new(sway_manager_daemon::repos::polkit::AgentHandle::default());
+        std::sync::Arc::new(sway_manager_daemon::domains::system::polkit::AgentHandle::default());
     {
         let handle = polkit_handle.clone();
         let log = logger.clone();
         tokio::spawn(async move {
-            use sway_manager_daemon::repos::polkit::agent;
+            use sway_manager_daemon::domains::system::polkit::agent;
             let gui_bin = std::env::var_os("SWAY_MANAGER_GUI").unwrap_or_else(|| {
                 std::ffi::OsString::from(
                     sway_manager_daemon::binary::binary_command("SwayManagerGUI")
@@ -406,8 +406,8 @@ fn local_invoke(args: &[String], stdout: &mut dyn Output) -> i32 {
         match sub.as_str() {
             "status" => {
                 let runner = SystemRunner;
-                let report = sway_manager_daemon::repos::portal::diagnose(&runner);
-                stdout.print_stdout(&sway_manager_daemon::repos::portal::status_text(&report));
+                let report = sway_manager_daemon::domains::system::portal::diagnose(&runner);
+                stdout.print_stdout(&sway_manager_daemon::domains::system::portal::status_text(&report));
                 return 0;
             }
             "test" => {
@@ -417,7 +417,7 @@ fn local_invoke(args: &[String], stdout: &mut dyn Output) -> i32 {
             "install" => {
                 let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
                 let runner = SystemRunner;
-                match sway_manager_daemon::repos::portal::install_config(&home, &runner) {
+                match sway_manager_daemon::domains::system::portal::install_config(&home, &runner) {
                     Ok(log) => {
                         for line in &log {
                             stdout.print_stdout(&format!("  {line}\n"));
@@ -442,7 +442,7 @@ fn local_invoke(args: &[String], stdout: &mut dyn Output) -> i32 {
             Some(_) => args[3..].join(" "),
             None => {
                 let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-                sway_manager_daemon::repos::wallpaper::wallpaper_folder(&home, &|path| {
+                sway_manager_daemon::domains::settings::wallpaper::wallpaper_folder(&home, &|path| {
                     std::path::Path::new(path).is_dir()
                 })
             }
@@ -458,7 +458,7 @@ fn local_invoke(args: &[String], stdout: &mut dyn Output) -> i32 {
         let sub = args.get(2).map(|sub| sub.to_lowercase()).unwrap_or_default();
         if sub == "status" {
             // Offline: no registration info without the daemon.
-            stdout.print_stdout(&sway_manager_daemon::repos::polkit::status_text(false, None));
+            stdout.print_stdout(&sway_manager_daemon::domains::system::polkit::status_text(false, None));
             return 0;
         }
         // `polkit agent` is standalone (never via socket); handled at
@@ -499,7 +499,7 @@ async fn main() {
             // Foreground standalone agent (never via the daemon
             // socket): minimal async adaptation at the call-site.
             std::process::exit(
-                sway_manager_daemon::repos::polkit::agent::run_foreground().await,
+                sway_manager_daemon::domains::system::polkit::agent::run_foreground().await,
             );
         }
         _ => {

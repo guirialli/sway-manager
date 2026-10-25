@@ -6,11 +6,11 @@ The **Polkit Domain** replaces the external LXDE-era polkit agent (`lxpolkit`,
 currently launched via `polkit-runner.sh`) with a native SwayManager agent split
 in two parts:
 
-- **Backend** (`daemon/src/repos/polkit.rs` + resident agent service): registers
+- **Backend** (`daemon/src/domains/system/polkit.rs` + resident agent service): registers
   the session on the **system bus** as `org.freedesktop.PolicyKit1.AuthenticationAgent`,
   runs the PAM conversation through the setuid helper, and enforces the fail-secure
   policy learned from CVE-2021-3560.
-- **Frontend** (`SwayManagerGUI polkit` + `gui/src/routes/polkit.html`): an
+- **Frontend** (`SwayManagerGUI polkit` + `gui/src/routes/system/polkit.html`): an
   ephemeral Tauri window per challenge, styled with the Cyberpunk design tokens
   (`specs/gui-theme-tokens.md`), following the GNOME HIG auth-dialog pattern.
 
@@ -25,13 +25,13 @@ Reference contracts: `org.freedesktop.PolicyKit1.Authority` and
 
 | Layer | Component | File Path | Responsibility |
 |---|---|---|---|
-| Domain | `PolkitChallenge`, `HelperEvent`, `polkit::Error` | `daemon/src/repos/polkit.rs` | Pure challenge model, helper-line parser, fail-secure result types |
-| Infrastructure | `agent` service (`register`, `serve`, `unregister`) | `daemon/src/repos/polkit.rs` (`agent` module) | `zbus` system-bus object + `RegisterAuthenticationAgent` lifecycle |
-| Infrastructure | `session` (`spawn_helper`, `respond`, `cancel`) | `daemon/src/repos/polkit.rs` (`session` module) | setuid-helper/socket conversation driver (PAM text protocol) |
+| Domain | `PolkitChallenge`, `HelperEvent`, `polkit::Error` | `daemon/src/domains/system/polkit.rs` | Pure challenge model, helper-line parser, fail-secure result types |
+| Infrastructure | `agent` service (`register`, `serve`, `unregister`) | `daemon/src/domains/system/polkit.rs` (`agent` module) | `zbus` system-bus object + `RegisterAuthenticationAgent` lifecycle |
+| Infrastructure | `session` (`spawn_helper`, `respond`, `cancel`) | `daemon/src/domains/system/polkit.rs` (`session` module) | setuid-helper/socket conversation driver (PAM text protocol) |
 | Infrastructure | CLI routing | `daemon/src/handlers.rs`, `daemon/src/commands.rs`, `daemon/src/main.rs` | `polkit status|agent|dismiss` dispatch; resident agent spawn in `run_daemon` |
 | Presentation | GUI entry | `gui/src-tauri/src/main.rs` | `SwayManagerGUI polkit` route, `app_id` fallback, query params (`action_id`, `message`, `identities`) |
 | Presentation | Tauri commands | `gui/src-tauri/src/tauri_runtime.rs`, `gui/src-tauri/src/polkit_dialog.rs` | `polkit_submit`, `polkit_cancel`, `polkit_state` invoke handlers |
-| Presentation | Frontend | `gui/src/routes/polkit.html` | Auth dialog (password field, identity selector, details expander) |
+| Presentation | Frontend | `gui/src/routes/system/polkit.html` | Auth dialog (password field, identity selector, details expander) |
 
 ---
 
@@ -95,7 +95,7 @@ when no other agent owns the session registration.
 ### 3.4 Frontend: Tauri dialog
 
 - `SwayManagerGUI polkit --action-id … --message … --identities a,b --pipe … --events …`
-  opens `routes/polkit.html` (480×320, frameless + `always_on_top` like the other small repo windows, centered).
+  opens `routes/system/polkit.html` (480×320, frameless + `always_on_top` like the other small repo windows, centered).
 - `app_id` fallback via `prgname_for("polkit") = "org.swaymanager.PolkitAuth"`,
   matched by a `for_window [app_id="org.swaymanager.PolkitAuth"] floating enable,
   move position center, sticky enable` rule (documented in `specs/sway-integration.md`).

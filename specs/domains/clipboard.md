@@ -52,7 +52,7 @@ sequenceDiagram
     Repo->>Repo: cliphist decode <id> | wl-copy [--type image/png]
 ```
 
-### Image pipeline (Rust port, `daemon/src/repos/clipboard_exec.rs`)
+### Image pipeline (Rust port, `daemon/src/domains/menus/clipboard_exec.rs`)
 
 - Detection: `[[ binary data` prefix in `cliphist list` → `is_image`.
 - Thumbnails: `write_thumb(home, id, bytes)` decodes raw bytes

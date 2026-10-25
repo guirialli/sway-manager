@@ -11,7 +11,7 @@
 
 use serde::{Deserialize, Serialize};
 use sway_manager_daemon::process::{notify, CommandRunner};
-use sway_manager_daemon::repos::{display, wallpaper, wallpaper_thumbs};
+use sway_manager_daemon::domains::settings::{display, wallpaper, wallpaper_thumbs};
 
 /// Modo de disposição de telas vindo do frontend.
 ///

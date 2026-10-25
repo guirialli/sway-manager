@@ -1,9 +1,9 @@
 //! Testes MonitorSwap + WallpaperPicker — oráculo: `tests/test_gui_windows.py`
 //! (`MonitorSwapTestCase` + `WallpaperPickerTestCase`).
 //!
-//! `#[path]` próprio p/ compilar com ou sem `pub mod mon_wall` em `lib.rs`
+//! `#[path = "../src/mon_wall.rs"]
 //! (registro pedido ao Main via `agent://all`).
-#[path = "../src/mon_wall.rs"]
+#[path = "../src/domains/settings/mon_wall.rs"]
 mod mon_wall;
 use std::io::Write as _;
 use sway_manager_daemon::process::{CommandRunner, FakeRunner};

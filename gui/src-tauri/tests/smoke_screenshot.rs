@@ -13,12 +13,12 @@ fn sway_available() -> bool {
 }
 
 fn live_screens(runner: &dyn CommandRunner) -> Vec<FrozenScreenDto> {
-    sway_manager_gui::portal_freeze::freeze_screens(runner)
+    sway_manager_gui::domains::system::portal_freeze::freeze_screens(runner)
         .into_iter()
         .map(|mut s| {
             // Captura real (paridade `prefreeze_all_outputs`).
             let dst = format!("/tmp/sway-manager-smoke-{}.png", s.name);
-            let ok = sway_manager_gui::portal_freeze::freeze_capture(runner, &s.name, &dst)
+            let ok = sway_manager_gui::domains::system::portal_freeze::freeze_capture(runner, &s.name, &dst)
                 .is_ok();
             assert!(ok, "grim -o {} falhou", s.name);
             s.image = Some(dst);

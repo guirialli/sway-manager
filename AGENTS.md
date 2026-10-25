@@ -3,14 +3,18 @@
 ## Project Structure & Module Organization
 
 `daemon/` is the Rust workspace root (`sway-manager-daemon` lib + `SwayManager`
-binary): `src/repos/` holds one module per system domain (audio, portal,
-screenshot, wallpaper…), `src/handlers.rs` routes CLI argv, `src/server.rs`
-serves the Unix-socket IPC, `src/main.rs` wires CLI/daemon startup.
+binary): `src/domains/` holds one module per system domain, grouped as
+`osd/` (audio), `menus/` (menu, clipboard), `settings/` (wallpaper, theme,
+appearance, display, app_config, lightdm), `system/` (battery, power, idle,
+lock, portal, screenshot, polkit, icons); `src/handlers.rs` routes CLI argv,
+`src/server.rs` serves the Unix-socket IPC, `src/main.rs` wires CLI/daemon startup.
 `gui/src-tauri/` is the Tauri v2 GUI (`SwayManagerGUI` binary): `src/main.rs`
 routes one `WebviewWindow` per command, `src/tauri_runtime.rs` exposes
-`#[tauri::command]` wrappers over daemon repos, `capabilities/main.json`
-grants frontend permissions. `gui/src/routes/*.html` are the vanilla-JS
-frontends (no framework). `udev/` holds the battery rule.
+`#[tauri::command]` wrappers over daemon domains, `src/domains/` mirrors the
+same layout (`osd/`, `menus/` reserved, `settings/`, `system/`),
+`capabilities/main.json` grants frontend permissions.
+`gui/src/routes/<domain>/*.html` are the vanilla-JS frontends (no framework).
+`udev/` holds the battery rule.
 
 ## Build, Test, and Development Commands
 
@@ -28,7 +32,7 @@ frontends (no framework). `udev/` holds the battery rule.
 
 Use Rust 2024 edition, `cargo fmt` defaults. Use `snake_case` for functions,
 variables, and modules; `PascalCase` for types; `UPPER_CASE` for constants.
-Keep Sway, `wpctl`, `grim`, `slurp`, and filesystem calls behind `repos/`
+Keep Sway, `wpctl`, `grim`, `slurp`, and filesystem calls behind `domains/`
 modules behind the `CommandRunner` seam (injectable `FakeRunner` in tests).
 Prefer small explicit functions, `Result`/`Option` over panics (no `unwrap`
 outside tests), and specific error values over generic strings.

@@ -8,8 +8,9 @@
 
 use std::collections::BTreeMap;
 use sway_manager_daemon::process::SystemRunner;
-use sway_manager_daemon::repos::{appearance, battery, lightdm, theme};
-use sway_manager_gui::{config_center, mon_wall, portal_freeze, BrightnessAction, VolumeAction};
+use sway_manager_daemon::domains::{settings::{appearance, lightdm, theme}, system::battery};
+use sway_manager_gui::domains::{settings::{config_center, mon_wall}, system::portal_freeze};
+use sway_manager_gui::{BrightnessAction, VolumeAction};
 
 fn home() -> String {
     std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string())
@@ -155,7 +156,7 @@ fn runner() -> SystemRunner {
     SystemRunner
 }
 
-// --- OSD / popup (routes/osd.html, brightness-popup.html) ---
+// --- OSD / popup (routes/osd/{osd,brightness-popup}.html) ---
 
 #[tauri::command]
 fn volume_osd(action: VolumeAction) -> Result<sway_manager_gui::VolumeOsd, String> {
@@ -169,15 +170,15 @@ fn brightness_osd(action: BrightnessAction) -> Result<u32, String> {
 
 #[tauri::command]
 fn brightness_popup_get() -> Result<u32, String> {
-    sway_manager_gui::commands::brightness_popup_get(&runner())
+    sway_manager_gui::domains::osd::commands::brightness_popup_get(&runner())
 }
 
 #[tauri::command]
 fn brightness_popup_set(value: u32) -> Result<u32, String> {
-    sway_manager_gui::commands::brightness_popup_set(&runner(), value)
+    sway_manager_gui::domains::osd::commands::brightness_popup_set(&runner(), value)
 }
 
-// --- ConfigCenter (routes/config-center.html, 6 páginas) ---
+// --- ConfigCenter (routes/settings/config-center.html, 6 páginas) ---
 
 #[tauri::command]
 fn monitors_page() -> config_center::MonitorsPage {
@@ -186,7 +187,7 @@ fn monitors_page() -> config_center::MonitorsPage {
 
 #[tauri::command]
 fn monitors_apply(mode: mon_wall::DisplayMode) -> Result<(), String> {
-    let daemon_mode = sway_manager_daemon::repos::display::DisplaySwitchType::from(mode);
+    let daemon_mode = sway_manager_daemon::domains::settings::display::DisplaySwitchType::from(mode);
     config_center::monitors_apply(&runner(), config_center::DisplayMode::from(daemon_mode))
 }
 
@@ -406,10 +407,10 @@ fn screenshot_window() -> Result<String, String> {
     portal_freeze::screenshot_window(&runner(), &home())
 }
 
-// --- Polkit (routes/polkit.html) ---
+// --- Polkit (routes/system/polkit.html) ---
 
 #[tauri::command]
-fn polkit_state(state: tauri::State<sway_manager_gui::polkit_dialog::PolkitDialogState>) -> Result<sway_manager_gui::polkit_dialog::PolkitDialogState, String> {
+fn polkit_state(state: tauri::State<sway_manager_gui::domains::system::polkit_dialog::PolkitDialogState>) -> Result<sway_manager_gui::domains::system::polkit_dialog::PolkitDialogState, String> {
     Ok(state.inner().clone())
 }
 
@@ -422,7 +423,7 @@ fn polkit_submit(password: String, pipe: tauri::State<std::sync::Mutex<std::fs::
     let mut buf = password.into_bytes();
     let result = (|| {
         let text = std::str::from_utf8(&buf).map_err(|_| "polkit: senha inválida".to_string())?;
-        let mut line = sway_manager_gui::polkit_dialog::submit_line(text)
+        let mut line = sway_manager_gui::domains::system::polkit_dialog::submit_line(text)
             .ok_or_else(|| "polkit: senha com quebra de linha rejeitada".to_string())?
             .into_bytes();
         let mut pipe = pipe.inner().lock().map_err(|err| format!("polkit: pipe bloqueado: {err}"))?;
@@ -443,7 +444,7 @@ fn polkit_submit(password: String, pipe: tauri::State<std::sync::Mutex<std::fs::
 fn polkit_cancel(pipe: tauri::State<std::sync::Mutex<std::fs::File>>, app: tauri::AppHandle) {
     use std::io::Write as _;
     if let Ok(mut pipe) = pipe.inner().lock() {
-        let _ = pipe.write_all(sway_manager_gui::polkit_dialog::cancel_line().as_bytes());
+        let _ = pipe.write_all(sway_manager_gui::domains::system::polkit_dialog::cancel_line().as_bytes());
         let _ = pipe.flush();
     }
     app.exit(0);

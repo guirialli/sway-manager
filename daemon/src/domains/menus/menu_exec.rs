@@ -6,7 +6,7 @@
 //! `show_menu_use_case.py` and `wofi_launcher.py` byte for byte.
 
 use crate::process::CommandRunner;
-pub use crate::repos::menu::MenuItem;
+pub use crate::domains::menus::menu::MenuItem;
 
 /// Lowercase accent-stripped key (mirrors `strip_accents`: NFKD + drop
 /// combining marks + lowercase). Rust std has no NFKD; this folds the

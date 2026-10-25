@@ -16,7 +16,7 @@ use sway_manager_daemon::dispatch::{CliRunner, DispatchOutcome, dispatch};
 use sway_manager_daemon::handlers::{SyncDeps, handle_sync};
 use sway_manager_daemon::process::{CommandRunner, FakeRunner as ProcessFake};
 use sway_manager_daemon::protocol::{Request, Response, decode_line, encode_line};
-use sway_manager_daemon::repos::{battery, lock, theme};
+use sway_manager_daemon::domains::{settings::theme, system::{battery, lock}};
 use sway_manager_daemon::server::{SyncCliRunner, handle_connection, is_daemon_running_at};
 use sway_manager_daemon::socket::{socket_path, socket_path_from};
 
@@ -341,7 +341,7 @@ struct StubLockCtx;
 
 impl lock::LockContext for StubLockCtx {
     fn swaylock_running(&self, _runner: &dyn CommandRunner) -> bool {
-        true // no-op path; lock tested separately in repos::lock
+        true // no-op path; lock tested separately in domains::system::lock
     }
     fn swaylock_bin(&self, _runner: &dyn CommandRunner) -> String {
         "swaylock".to_string()

@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 use sway_manager_daemon::process::{CmdOutput, CommandRunner};
-use sway_manager_gui::commands::{
+use sway_manager_gui::domains::osd::commands::{
     brightness_popup_get, brightness_popup_set, brightness_osd, volume_osd, BrightnessAction,
     VolumeAction,
 };

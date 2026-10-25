@@ -13,7 +13,7 @@
 //! in the CLI process (never via the socket); its chooser UI stays in
 //! Python.
 
-use crate::repos::{audio, battery, idle, lock, menu, portal, power, screenshot, theme, wallpaper};
+use crate::domains::{menus::menu, osd::audio, settings::{theme, wallpaper}, system::{battery, idle, lock, portal, power, screenshot}};
 
 pub const UNKNOWN_COMMAND_SUFFIX: &str = "não reconhecido pelo SwayManager.\n";
 
@@ -39,7 +39,7 @@ pub trait SyncDeps: Send + Sync {
     fn cancel_polkit_challenge(&self) {}
     /// One-line polkit agent state for `polkit status`.
     fn polkit_status_line(&self) -> String {
-        crate::repos::polkit::status_text(false, None)
+        crate::domains::system::polkit::status_text(false, None)
     }
 }
 impl<D: SyncDeps> SyncDeps for std::sync::Arc<D> {
@@ -184,7 +184,7 @@ pub fn handle_sync(deps: &dyn SyncDeps, args: &[String]) -> (String, String) {
             // screenshot [mode]` and ack immediately. Mirrors
             // `dispatch_cli_command` → `handle_screenshot` routed to the
             // GUI process (the Qt freeze overlay stays in Python); the
-            // headless `grim` fallback lives in `repos::screenshot`
+            // headless `grim` fallback lives in `domains::system::screenshot`
             // for standalone/headless use.
             let _mode = screenshot::parse_mode(args.get(2).map(String::as_str));
             deps.spawn_gui(args);
@@ -278,7 +278,7 @@ pub fn handle_sync(deps: &dyn SyncDeps, args: &[String]) -> (String, String) {
                 deps.cancel_polkit_challenge();
                 (String::new(), String::new())
             }
-            _ => (String::from(crate::repos::polkit::USAGE), String::new()),
+            _ => (String::from(crate::domains::system::polkit::USAGE), String::new()),
         },
         "reload-cache" | "refresh-cache" => {
             let items = menu::SYSTEM_ACTIONS.len();

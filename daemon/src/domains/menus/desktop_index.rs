@@ -7,8 +7,8 @@
 //! accent-insensitive A-Z sort, system actions appended last.
 
 use crate::process::CommandRunner;
-use crate::repos::menu::{self, MenuItem};
-use crate::repos::menu_exec::strip_accents;
+use crate::domains::menus::menu::{self, MenuItem};
+use crate::domains::menus::menu_exec::strip_accents;
 
 pub const EXPLICIT_IGNORE_EXECS: &[&str] = &[
     "xfce4-about",
@@ -185,7 +185,7 @@ pub fn resolve_icon(_icon_name: &str, _runner: &dyn CommandRunner) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repos::menu::SYSTEM_ACTIONS;
+    use crate::domains::menus::menu::SYSTEM_ACTIONS;
 
     #[test]
     fn skips_hidden_and_empty_exec() {

@@ -6,8 +6,8 @@
 //! binário — encaminhar de volta seria loop). Cada comando abre sua
 //! `WebviewWindow` com a rota HTML portada (`gui/src/routes/*.html`).
 
-mod osd_singleton;
 mod tauri_runtime;
+use sway_manager_gui::domains::osd::singleton as osd_singleton;
 
 use tauri::{Manager as _, WebviewUrl, WebviewWindowBuilder};
 
@@ -43,24 +43,24 @@ fn prgname_for(cmd: &str) -> Option<&'static str> {
 /// Rota HTML + título + geometria por comando (paridade Qt).
 fn window_spec(cmd: &str, sub: Option<&str>) -> (&'static str, &'static str, f64, f64, bool) {
     match cmd {
-        "settings" | "config" | "config-center" => ("routes/config-center.html", "SwayManager Control Center", 920.0, 620.0, false),
-        "monitor" => ("routes/monitor.html", "Monitores", 520.0, 320.0, false),
-        "wallpaper" => ("routes/wallpaper.html", "Seletor de Papel de Parede", 880.0, 560.0, false),
-        "portal" => ("routes/portal.html", "Compartilhar Tela", 640.0, 480.0, false),
-        "polkit" => ("routes/polkit.html", "Autenticação necessária", 480.0, 320.0, false),
-        "screenshot" if sub == Some("area") => ("routes/freeze.html", "Selecionar Área", 1920.0, 1080.0, true),
-        "screenshot" => ("routes/freeze.html", "Captura de Tela", 1920.0, 1080.0, true),
+        "settings" | "config" | "config-center" => ("routes/settings/config-center.html", "SwayManager Control Center", 920.0, 620.0, false),
+        "monitor" => ("routes/settings/monitor.html", "Monitores", 520.0, 320.0, false),
+        "wallpaper" => ("routes/settings/wallpaper.html", "Seletor de Papel de Parede", 880.0, 560.0, false),
+        "portal" => ("routes/system/portal.html", "Compartilhar Tela", 640.0, 480.0, false),
+        "polkit" => ("routes/system/polkit.html", "Autenticação necessária", 480.0, 320.0, false),
+        "screenshot" if sub == Some("area") => ("routes/system/freeze.html", "Selecionar Área", 1920.0, 1080.0, true),
+        "screenshot" => ("routes/system/freeze.html", "Captura de Tela", 1920.0, 1080.0, true),
         "brilho" | "brightness" if sub.is_none() || sub == Some("popup") => {
-            ("routes/brightness-popup.html", "Brilho", 320.0, 60.0, true)
+            ("routes/osd/brightness-popup.html", "Brilho", 320.0, 60.0, true)
         }
-        _ => ("routes/osd.html", "OSD", 300.0, 200.0, true),
+        _ => ("routes/osd/osd.html", "OSD", 300.0, 200.0, true),
     }
 }
 
 /// Outputs ativos para overlays (um por tela, paridade Qt).
 fn overlay_outputs() -> Vec<(String, f64, f64)> {
     let runner = sway_manager_daemon::process::SystemRunner;
-    let screens = sway_manager_gui::portal_freeze::freeze_screens(
+    let screens = sway_manager_gui::domains::system::portal_freeze::freeze_screens(
         &runner as &dyn sway_manager_daemon::process::CommandRunner,
     );
     if screens.is_empty() {
@@ -83,9 +83,9 @@ fn prefreeze_all_outputs() {
 /// Núcleo testável: `grim -o <nome> /tmp/sway-manager-freeze-<nome>.png`
 /// para cada output ativo (paridade `load_frozen_screens`).
 fn prefreeze_with(runner: &dyn sway_manager_daemon::process::CommandRunner) {
-    for screen in sway_manager_gui::portal_freeze::freeze_screens(runner) {
+    for screen in sway_manager_gui::domains::system::portal_freeze::freeze_screens(runner) {
         let dst = format!("/tmp/sway-manager-freeze-{}.png", screen.name);
-        let _ = sway_manager_gui::portal_freeze::freeze_capture(runner, &screen.name, &dst);
+        let _ = sway_manager_gui::domains::system::portal_freeze::freeze_capture(runner, &screen.name, &dst);
     }
 }
 
@@ -324,7 +324,7 @@ fn run_window(cmd: &str, sub: Option<&str>, action: Option<&str>) {
             // Sem compositing não há transparência real: `transparent(true)`
             // apaga o TEXTO das janelas pequenas (OSD mostrava só a barra).
             // Todas desenham fundo opaco próprio no CSS (freeze já era `false`).
-            let is_osd = route == "routes/osd.html";
+            let is_osd = route == "routes/osd/osd.html";
             let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(url.into()))
                 .title(title)
                 .inner_size(width, height)
@@ -370,7 +370,7 @@ fn run_window(cmd: &str, sub: Option<&str>, action: Option<&str>) {
 /// Diálogo polkit (contrato §5): `SwayManagerGUI polkit --action-id …
 /// --message … --identities <csv> --pipe <fd> --events <fd>`.
 ///
-/// Abre `routes/polkit.html?`action_id=&message=&identities= (via
+/// Abre `routes/system/polkit.html?`action_id=&message=&identities= (via
 /// `percent_encode` — NUNCA o cookie, fora do argv por contrato); o pipe
 /// (fd 3) vira `State<Mutex<File>>` p/ `polkit_submit/cancel` e o fd de
 /// eventos (fd 4) é lido numa task assíncrona que re-emite cada linha BE→GUI
@@ -381,7 +381,7 @@ fn run_polkit() {
     use tauri::{Emitter as _, Manager as _};
 
     let args: Vec<String> = std::env::args().skip(2).collect();
-    let launch = match sway_manager_gui::polkit_dialog::parse_polkit_args(&args) {
+    let launch = match sway_manager_gui::domains::system::polkit_dialog::parse_polkit_args(&args) {
         Ok(launch) => launch,
         Err(usage) => {
             eprintln!("{usage}");
@@ -399,8 +399,8 @@ fn run_polkit() {
         percent_encode(&launch.message),
         percent_encode(&launch.identities.join(",")),
     );
-    let state = sway_manager_gui::polkit_dialog::PolkitDialogState::initial(&launch);
-    let url = format!("routes/polkit.html{query}");
+    let state = sway_manager_gui::domains::system::polkit_dialog::PolkitDialogState::initial(&launch);
+    let url = format!("routes/system/polkit.html{query}");
     tauri::Builder::default()
         .manage(state)
         .manage(std::sync::Mutex::new(write))
@@ -418,10 +418,10 @@ fn run_polkit() {
                 let reader = std::io::BufReader::new(read);
                 for line in reader.lines() {
                     let Ok(line) = line else { break };
-                    let Some(event) = sway_manager_gui::polkit_dialog::gui_event_from_json(&line) else {
+                    let Some(event) = sway_manager_gui::domains::system::polkit_dialog::gui_event_from_json(&line) else {
                         continue;
                     };
-                    let done = matches!(event, sway_manager_gui::polkit_dialog::GuiEvent::Completed(_));
+                    let done = matches!(event, sway_manager_gui::domains::system::polkit_dialog::GuiEvent::Completed(_));
                     let payload = event.payload();
                     if handle.emit_to("main", "polkit-event", payload).is_err() {
                         break;
@@ -543,15 +543,15 @@ mod tests {
 
     #[test]
     fn window_specs_match_qt_geometry() {
-        assert_eq!(window_spec("settings", None).0, "routes/config-center.html");
-        assert_eq!(window_spec("monitor", None).0, "routes/monitor.html");
-        assert_eq!(window_spec("wallpaper", None).0, "routes/wallpaper.html");
-        assert_eq!(window_spec("brilho", None).0, "routes/brightness-popup.html");
-        assert_eq!(window_spec("brilho", Some("popup")).0, "routes/brightness-popup.html");
-        assert_eq!(window_spec("brilho", Some("up")).0, "routes/osd.html");
-        assert_eq!(window_spec("screenshot", Some("area")).0, "routes/freeze.html");
-        assert_eq!(window_spec("portal", None).0, "routes/portal.html");
-        assert_eq!(window_spec("polkit", None), ("routes/polkit.html", "Autenticação necessária", 480.0, 320.0, false));
+        assert_eq!(window_spec("settings", None).0, "routes/settings/config-center.html");
+        assert_eq!(window_spec("monitor", None).0, "routes/settings/monitor.html");
+        assert_eq!(window_spec("wallpaper", None).0, "routes/settings/wallpaper.html");
+        assert_eq!(window_spec("brilho", None).0, "routes/osd/brightness-popup.html");
+        assert_eq!(window_spec("brilho", Some("popup")).0, "routes/osd/brightness-popup.html");
+        assert_eq!(window_spec("brilho", Some("up")).0, "routes/osd/osd.html");
+        assert_eq!(window_spec("screenshot", Some("area")).0, "routes/system/freeze.html");
+        assert_eq!(window_spec("portal", None).0, "routes/system/portal.html");
+        assert_eq!(window_spec("polkit", None), ("routes/system/polkit.html", "Autenticação necessária", 480.0, 320.0, false));
         assert!(!window_spec("settings", None).4);
         assert!(window_spec("screenshot", Some("area")).4);
     }
