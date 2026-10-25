@@ -10,7 +10,6 @@ use std::sync::{Arc, Mutex};
 
 use sway_manager_daemon::binary::binary_command;
 use sway_manager_daemon::client::{Output, Stdio, send_command, send_command_to};
-use sway_manager_daemon::gui::SubprocessSpawner;
 use sway_manager_daemon::handlers::SyncDeps;
 use sway_manager_daemon::logging;
 use sway_manager_daemon::process::{CommandRunner, SystemRunner};
@@ -157,6 +156,12 @@ impl SyncDeps for LiveDeps {
         };
         clipboard_exec::execute(runner, &home, &icon, &list, &decode, &select, action);
     }
+    fn spawn_gui(&self, args: &[String]) {
+        spawn_gui_detached(args);
+    }
+    fn wallpaper_dir_exists(&self, path: &str) -> bool {
+        std::path::Path::new(path).is_dir()
+    }
 }
 
 static LIVE_LOCK_CTX: LiveLockCtx = LiveLockCtx {
@@ -247,6 +252,40 @@ fn spawn_gui_detached(args: &[String]) {
     }
 }
 
+/// Argv da GUI anexada: `[SwayManagerGUI, ...args[1:]]` (paridade `gui_command`).
+fn attached_gui_cmd(args: &[String]) -> Vec<String> {
+    let mut cmd = binary_command("SwayManagerGUI");
+    if args.len() > 1 {
+        cmd.extend(args[1..].iter().cloned());
+    }
+    cmd
+}
+
+/// Spawna a GUI ANEXADA (stdin/stdout/stderr herdados) e propaga o exit.
+///
+/// Só o chooser `portal` usa: o xdg-desktop-portal-wlr o invoca como
+/// subprocesso e lê a seleção no stdout. Detached (`/dev/null`) = o xdpw
+/// recebe EOF vazio e o compartilhamento nunca se estabelece.
+fn spawn_gui_attached(args: &[String]) -> i32 {
+    let cmd = attached_gui_cmd(args);
+    let Some((program, rest)) = cmd.split_first() else {
+        return 1;
+    };
+    match std::process::Command::new(program)
+        .args(rest)
+        .stdin(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
+        .status()
+    {
+        Ok(status) => status.code().unwrap_or(1),
+        Err(err) => {
+            eprintln!("Erro ao disparar processo GUI isolado: {err}");
+            1
+        }
+    }
+}
+
 async fn run_daemon() -> i32 {
     runtime::setup_environment();
     let logger = logging::logger();
@@ -289,8 +328,7 @@ async fn run_daemon() -> i32 {
         theme_fs: LiveThemeFs,
     });
     let runner = SyncCliRunner::new(deps);
-    let gui = SubprocessSpawner;
-    if let Err(err) = server::serve_with(socket_path(), listener, runner, gui, logger).await {
+    if let Err(err) = server::serve_with(socket_path(), listener, runner, logger).await {
         eprintln!("❌ Erro no loop do daemon: {err}");
         return 1;
     }
@@ -311,9 +349,69 @@ fn count_desktop_files() -> usize {
 }
 
 fn local_invoke(args: &[String], stdout: &mut dyn Output) -> i32 {
-    // Portal and standalone: run without the daemon. The Qt chooser UI
-    // stays in Python — delegate argv-identical to SwayManagerGUI/Python.
-    let _ = stdout;
+    // Mirrors `run_cli` local execution: `--standalone` runs the CLI
+    // handlers in-process; `portal` always runs locally (never via the
+    // socket) since xdg-desktop-portal-wlr invokes it as a subprocess.
+    // `portal status` prints the diagnostics report; `portal test` and
+    // the bare chooser resolve through the same status/test text path
+    // the daemon ships (the Qt chooser UI stays in Python).
+    let cmd = args.get(1).map(|cmd| cmd.to_lowercase()).unwrap_or_default();
+    if cmd == "portal" {
+        let sub = args.get(2).map(|sub| sub.to_lowercase()).unwrap_or_default();
+        match sub.as_str() {
+            "status" => {
+                let runner = SystemRunner;
+                let report = sway_manager_daemon::repos::portal::diagnose(&runner);
+                stdout.print_stdout(&sway_manager_daemon::repos::portal::status_text(&report));
+                return 0;
+            }
+            "test" => {
+                stdout.print_stdout("[TESTE] Cancelado pelo usuário\n");
+                return 0;
+            }
+            "install" => {
+                let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+                let runner = SystemRunner;
+                match sway_manager_daemon::repos::portal::install_config(&home, &runner) {
+                    Ok(log) => {
+                        for line in &log {
+                            stdout.print_stdout(&format!("  {line}\n"));
+                        }
+                        return 0;
+                    }
+                    Err(err) => {
+                        stdout.print_stderr(&format!("Aviso: falha ao configurar portal: {err}\n"));
+                        return 1;
+                    }
+                }
+            }
+            _ => {
+                return spawn_gui_attached(args);
+            }
+        }
+    }
+    if cmd == "wallpaper" && args.get(2).is_some_and(|arg| arg.eq_ignore_ascii_case("get")) {
+        // Mirrors `handle_wallpaper` folder resolution for scripts
+        // (paridade `handle_sync`: pasta explícita = `args[3..]`).
+        let folder = match args.get(3) {
+            Some(_) => args[3..].join(" "),
+            None => {
+                let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+                sway_manager_daemon::repos::wallpaper::wallpaper_folder(&home, &|path| {
+                    std::path::Path::new(path).is_dir()
+                })
+            }
+        };
+        if !folder.is_empty() {
+            stdout.print_stdout(&format!("{folder}\n"));
+        }
+        return 0;
+    }
+    if cmd == "osd" && args.get(2).is_none() {
+        // Mirrors `handle_osd`: bare `osd` prints the notice on stdout.
+        stdout.print_stdout("OSD não informado!\n");
+        return 0;
+    }
     spawn_gui_detached(args);
     0
 }
@@ -359,11 +457,15 @@ pub async fn forward_to(socket: &std::path::Path, args: &[String], output: &mut 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{LazyLock, Mutex};
+
+    /// Serializa testes que mutam `HOME` (env global, race entre threads).
+    static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     #[test]
     fn expand_home_tilde() {
-        // SAFETY: test binary runs tests on threads; env mutation is
-        // contained to this assertion sequence.
+        let _guard = ENV_LOCK.lock().unwrap();
+        // SAFETY: serializado pelo mutex acima.
         unsafe { std::env::set_var("HOME", "/home/tester") };
         assert_eq!(expand_home("~/foo"), "/home/tester/foo");
         assert_eq!(expand_home("/abs/path"), "/abs/path");
@@ -382,6 +484,7 @@ mod tests {
 
     #[test]
     fn daemon_log_without_file_prints_notice() {
+        let _guard = ENV_LOCK.lock().unwrap();
         // HOME without logs dir → "Nenhum log registrado...".
         let dir = tempfile::tempdir().unwrap();
         unsafe { std::env::set_var("HOME", dir.path().to_str().unwrap()) };
@@ -396,10 +499,54 @@ mod tests {
     }
 
     #[test]
-    fn local_invoke_returns_zero() {
+    fn attached_gui_cmd_carries_portal_subcommand() {
+        // Regressão: o chooser precisa herdar o stdio do xdpw (anexado);
+        // detached (`/dev/null`) = xdpw recebe EOF e nada compartilha.
+        let cmd = attached_gui_cmd(&["SwayManager".to_string(), "portal".to_string()]);
+        assert!(cmd[0].contains("SwayManagerGUI"), "{cmd:?}");
+        assert_eq!(&cmd[1..], &["portal".to_string()]);
+    }
+
+    #[test]
+    fn local_invoke_portal_without_binary_fails() {
         let mut output = Stdio;
-        // Spawns detached (fails silently without GUI binary), returns 0.
-        assert_eq!(local_invoke(&["SwayManager".to_string(), "portal".to_string()], &mut output), 0);
+        // Anexado: sem o binário GUI ao lado, o spawn falha e o exit
+        // propaga 1 (antes: detached falhava silencioso e retornava 0).
+        assert_eq!(local_invoke(&["SwayManager".to_string(), "portal".to_string()], &mut output), 1);
+    }
+
+    #[test]
+    fn local_invoke_bare_osd_prints_notice() {
+        // Mirrors `handle_osd` bare branch (`print("OSD não informado!")`).
+        struct Capture(String);
+        impl Output for Capture {
+            fn print_stdout(&mut self, text: &str) {
+                self.0.push_str(text);
+            }
+            fn print_stderr(&mut self, _text: &str) {}
+        }
+        let mut output = Capture(String::new());
+        assert_eq!(local_invoke(&["SwayManager".to_string(), "osd".to_string()], &mut output), 0);
+        assert_eq!(output.0, "OSD não informado!\n");
+    }
+
+    #[test]
+    fn local_invoke_wallpaper_get_prints_folder() {
+        // Regressão: imprimia `get /tmp` (`args[2..]` incluía o `get`).
+        struct Capture(String);
+        impl Output for Capture {
+            fn print_stdout(&mut self, text: &str) {
+                self.0.push_str(text);
+            }
+            fn print_stderr(&mut self, _text: &str) {}
+        }
+        let mut output = Capture(String::new());
+        let code = local_invoke(
+            &["SwayManager".to_string(), "wallpaper".to_string(), "get".to_string(), "/tmp".to_string()],
+            &mut output,
+        );
+        assert_eq!(code, 0);
+        assert_eq!(output.0, "/tmp\n");
     }
 
     #[tokio::test]

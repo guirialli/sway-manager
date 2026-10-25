@@ -3,55 +3,25 @@
 # Exit on error
 set -e
 
-VENV_PATH="venv"
-GUI_SOURCE="src/gui_main.py"
 DAEMON_APP_NAME="SwayManager"
 GUI_APP_NAME="SwayManagerGUI"
+GUI_CRATE_DIR="gui/src-tauri"
 OUTPUT_DIR="out"
 
-echo "--- 🚀 Iniciando processo de Build (Daemon Rust + GUI Nuitka) ---"
+echo "--- 🚀 Iniciando processo de Build (Daemon Rust + GUI Tauri) ---"
 
-# Verificar se o Python 3 está disponível (testes + build da GUI)
-if ! command -v python3 &> /dev/null; then
-    echo "❌ Erro: python3 não encontrado. Instale o Python com: sudo apt install python3 python3-venv"
-    exit 1
-fi
-
-# Verificar se o cargo está disponível (build do daemon Rust)
+# Verificar se o cargo está disponível (build do daemon e da GUI)
 if ! command -v cargo &> /dev/null; then
     echo "❌ Erro: cargo não encontrado. Instale o Rust com: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
     exit 1
 fi
 
-# Verificar se o patchelf está disponível (necessário para o Nuitka em modo standalone no Linux)
-if ! command -v patchelf &> /dev/null; then
-    echo "❌ Erro: 'patchelf' não encontrado. O Nuitka requer 'patchelf' para compilar em modo standalone no Linux."
-    echo "💡 Instale com: sudo apt install patchelf  (ou sudo dnf install patchelf / nix-shell)"
+# Verificar dev-libs do Tauri/WebKitGTK
+if ! pkg-config --exists webkit2gtk-4.1 2>/dev/null; then
+    echo "❌ Erro: libwebkit2gtk-4.1-dev não encontrada."
+    echo "💡 Instale com: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev"
     exit 1
 fi
-
-# Criar venv se não existir
-if [ ! -d "$VENV_PATH" ]; then
-    echo "📦 Criando ambiente virtual em $VENV_PATH..."
-    python3 -m venv "$VENV_PATH"
-fi
-
-echo "🔄 Ativando ambiente virtual..."
-source "$VENV_PATH/bin/activate"
-
-echo "⬆️ Atualizando pip e instalando dependências do projeto..."
-pip install --upgrade pip setuptools wheel
-if [ -f "requirements.txt" ]; then
-    pip install -r requirements.txt
-fi
-
-if ! command -v nuitka &> /dev/null; then
-    echo "📦 Nuitka não encontrado no ambiente virtual. Instalando..."
-    pip install nuitka
-fi
-
-echo "🧪 Executando suíte de testes automatizados (Python)..."
-PYTHONPATH=src QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -v
 
 echo "🦀 Executando suíte de testes do daemon (Rust)..."
 (
@@ -59,16 +29,15 @@ echo "🦀 Executando suíte de testes do daemon (Rust)..."
     cargo test
 )
 
+echo "🦀 Executando suíte de testes da GUI (Rust)..."
+(
+    cd "$GUI_CRATE_DIR"
+    cargo test
+)
+
 echo "🧹 Limpando pastas de build anteriores..."
 rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR"
-
-NUITKA_COMMON_ARGS=(
-    "--standalone"
-    "--enable-plugin=pyside6"
-    "--assume-yes-for-downloads"
-    "--warn-implicit-exceptions"
-)
 
 echo "⚙️ Compilando o daemon/CLI ($DAEMON_APP_NAME) com Cargo (release)..."
 (
@@ -77,16 +46,20 @@ echo "⚙️ Compilando o daemon/CLI ($DAEMON_APP_NAME) com Cargo (release)..."
 )
 cp "daemon/target/release/sway-manager-daemon" "$OUTPUT_DIR/$DAEMON_APP_NAME"
 
-echo "⚙️ Compilando o executável GUI ($GUI_APP_NAME) com Nuitka..."
-python3 -m nuitka "${NUITKA_COMMON_ARGS[@]}" "--output-dir=$OUTPUT_DIR" "--output-filename=$GUI_APP_NAME" "$GUI_SOURCE"
+echo "⚙️ Compilando a GUI Tauri ($GUI_APP_NAME) com Cargo (release)..."
+(
+    cd "$GUI_CRATE_DIR"
+    # O build-script do Tauri só observa tauri.conf.json: sem o touch,
+    # HTML/CSS/JS alterados NÃO são re-embarcados no binário (bug silencioso).
+    touch tauri.conf.json
+    cargo build --release
+)
+cp "$GUI_CRATE_DIR/target/release/$GUI_APP_NAME" "$OUTPUT_DIR/$GUI_APP_NAME"
 
 echo "📦 Agrupando binários em $OUTPUT_DIR/main.dist/..."
 mkdir -p "$OUTPUT_DIR/main.dist"
 cp "$OUTPUT_DIR/$DAEMON_APP_NAME" "$OUTPUT_DIR/main.dist/"
-if [ -d "$OUTPUT_DIR/gui_main.dist" ]; then
-    cp -rf "$OUTPUT_DIR/gui_main.dist/"* "$OUTPUT_DIR/main.dist/"
-    rm -rf "$OUTPUT_DIR/gui_main.dist"
-fi
+cp "$OUTPUT_DIR/$GUI_APP_NAME" "$OUTPUT_DIR/main.dist/"
 
 # Criar link simbólico sway-manager e sway-manager-gui no out/main.dist
 cd "$OUTPUT_DIR/main.dist"
@@ -98,10 +71,8 @@ if [ -f "$OUTPUT_DIR/main.dist/$DAEMON_APP_NAME" ] && [ -f "$OUTPUT_DIR/main.dis
     echo "--- ✅ Build concluído com sucesso! ---"
     echo "📍 Binários compilados disponíveis em:"
     echo "   - Daemon/CLI (Rust): ./$OUTPUT_DIR/main.dist/$DAEMON_APP_NAME"
-    echo "   - GUI (Nuitka):      ./$OUTPUT_DIR/main.dist/$GUI_APP_NAME"
+    echo "   - GUI (Tauri):       ./$OUTPUT_DIR/main.dist/$GUI_APP_NAME"
 else
     echo "❌ Erro durante a compilação."
     exit 1
 fi
-
-deactivate

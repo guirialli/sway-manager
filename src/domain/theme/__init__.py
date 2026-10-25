@@ -1,1 +1,0 @@
-# Domain theme package

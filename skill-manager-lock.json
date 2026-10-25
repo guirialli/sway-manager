@@ -11,6 +11,16 @@
         "ssh": "git@gitlab-ssh.solucoessga.com.br:guirialli/carregar-contexto.git",
         "https": "https://gitlab.solucoessga.com.br/guirialli/carregar-contexto.git"
       }
+    },
+    "guirialli/spec-create": {
+      "version": "1.0.0",
+      "gitlabProjectId": null,
+      "commitSha": "b2a2e3c5199aa6e3d77746832833b9e74ccd1b6c",
+      "contentHash": "sha256:c9e41b1453bb3872f8343bb0ca1a3d54b92f721ab3a3f02c53c99687cde48283",
+      "repository": {
+        "ssh": "git@gitlab-ssh.solucoessga.com.br:guirialli/spec-create.git",
+        "https": "https://gitlab.solucoessga.com.br/guirialli/spec-create.git"
+      }
     }
   }
 }

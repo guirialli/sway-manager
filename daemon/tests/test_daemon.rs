@@ -11,9 +11,8 @@ use std::time::Duration;
 
 use sway_manager_daemon::binary::binary_command;
 use sway_manager_daemon::client::{Output, send_command_to};
-use sway_manager_daemon::commands::{GUI_COMMANDS, INTERACTIVE_COMMANDS, is_gui_command};
+use sway_manager_daemon::commands::{INTERACTIVE_COMMANDS, is_interactive, is_interactive_args};
 use sway_manager_daemon::dispatch::{CliRunner, DispatchOutcome, dispatch};
-use sway_manager_daemon::gui::{GuiSpawner, gui_command};
 use sway_manager_daemon::handlers::{SyncDeps, handle_sync};
 use sway_manager_daemon::process::{CommandRunner, FakeRunner as ProcessFake};
 use sway_manager_daemon::protocol::{Request, Response, decode_line, encode_line};
@@ -51,18 +50,6 @@ impl CliRunner for FakeRunner {
     }
 }
 
-#[derive(Default, Clone)]
-struct FakeGui {
-    spawned: Arc<Mutex<Vec<Vec<String>>>>,
-}
-
-impl GuiSpawner for FakeGui {
-    fn spawn_gui(&self, args: &[String]) -> Vec<String> {
-        let cmd = gui_command(args);
-        self.spawned.lock().unwrap().push(cmd.clone());
-        cmd
-    }
-}
 
 #[derive(Default)]
 struct SilentOutput {
@@ -153,16 +140,10 @@ fn dispatch_swallows_cli_error_and_runs_gc() {
         calls: Arc::clone(&calls),
         _gc_calls: Arc::clone(&gc_calls),
     };
-    let gui = FakeGui::default();
 
-    let outcome = dispatch(
-        &argv(&["SwayManager", "battery", "toggle"]),
-        &runner,
-        &gui,
-        || {
-            *gc_calls.lock().unwrap() += 1;
-        },
-    );
+    let outcome = dispatch(&argv(&["SwayManager", "battery", "toggle"]), &runner, || {
+        *gc_calls.lock().unwrap() += 1;
+    });
 
     assert_eq!(
         outcome,
@@ -173,7 +154,6 @@ fn dispatch_swallows_cli_error_and_runs_gc() {
     );
     assert_eq!(*calls.lock().unwrap(), 1);
     assert_eq!(*gc_calls.lock().unwrap(), 1);
-    assert!(gui.spawned.lock().unwrap().is_empty());
 }
 
 // (vii) test_client_send_command_success — full Unix-socket round-trip.
@@ -208,10 +188,11 @@ async fn client_round_trip_over_unix_socket() {
     assert_eq!(output.stdout, "OK for battery");
 }
 
-// (viii) test_gui_commands_dispatch_spawns_gui_executable
+// (viii) GUI routing lives INSIDE `handle_sync` (never a name-only
+// detour in `dispatch`): every command reaches the runner, and the
+// sync handler decides per-argv whether to spawn, print or execute.
 #[test]
-fn dispatch_routes_gui_commands_to_spawner() {
-    let gui = FakeGui::default();
+fn dispatch_runs_every_command_through_runner() {
     let runner = FakeRunner {
         fail_on_battery: false,
         calls: Arc::new(Mutex::new(0)),
@@ -221,28 +202,35 @@ fn dispatch_routes_gui_commands_to_spawner() {
     for args in [
         argv(&["SwayManager", "settings"]),
         argv(&["SwayManager", "screenshot", "area"]),
+        argv(&["SwayManager", "wallpaper", "get", "/tmp"]),
+        argv(&["SwayManager", "lock"]),
     ] {
-        let outcome = dispatch(&args, &runner, &gui, || {});
-        assert_eq!(outcome, DispatchOutcome::GuiSpawned);
+        let outcome = dispatch(&args, &runner, || {});
+        assert!(matches!(outcome, DispatchOutcome::CliExecuted { .. }), "{args:?}");
     }
-
-    let spawned = gui.spawned.lock().unwrap();
-    assert_eq!(spawned.len(), 2);
-    assert_eq!(&spawned[0][1..], &["settings".to_string()]);
-    assert_eq!(&spawned[1][1..], &["screenshot".to_string(), "area".to_string()]);
+    assert_eq!(*runner.calls.lock().unwrap(), 4);
 }
 
-// (ix) test_spawn_standalone_gui_invokes_subprocess — GUI spawn builds
-// `[SwayManagerGUI, ...subcommand]`; plus the clipboard `ensure_daemon`
-// contract: `wl-paste --watch cliphist store` is the daemonized command.
+// (ix) Interactive gate is argv-aware: `wallpaper get` prints (sync),
+// bare `wallpaper` spawns the picker (interactive); the clipboard
+// `ensure_daemon` contract: `wl-paste --watch cliphist store`.
 #[test]
-fn gui_spawn_builds_isolated_subprocess_command() {
-    let cmd = gui_command(&argv(&["SwayManager", "settings"]));
-    assert!(cmd.iter().any(|arg| arg.contains("SwayManagerGUI")));
-    assert!(cmd.contains(&"settings".to_string()));
-
-    assert!(is_gui_command("settings"));
-    assert!(!GUI_COMMANDS.contains(&"battery"));
+fn interactive_gate_excludes_wallpaper_get() {
+    assert!(is_interactive("wallpaper"));
+    assert!(is_interactive_args("wallpaper", &argv(&["SwayManager", "wallpaper"])));
+    assert!(is_interactive_args(
+        "wallpaper",
+        &argv(&["SwayManager", "wallpaper", "/fotos"])
+    ));
+    assert!(!is_interactive_args(
+        "wallpaper",
+        &argv(&["SwayManager", "wallpaper", "get"])
+    ));
+    assert!(!is_interactive_args(
+        "wallpaper",
+        &argv(&["SwayManager", "wallpaper", "get", "/tmp"])
+    ));
+    assert!(!is_interactive("battery"));
 
     let cliphist_watch = ["wl-paste", "--watch", "cliphist", "store"];
     assert_eq!(cliphist_watch[0], "wl-paste");
@@ -283,7 +271,7 @@ async fn server_answers_malformed_request_with_exit_code_1() {
             _gc_calls: Arc::new(Mutex::new(0)),
         };
         let (logger, _rx) = sway_manager_daemon::logging::test_logger();
-        handle_connection(&mut conn, &runner, &FakeGui::default(), Duration::from_secs(2), &logger).await;
+        handle_connection(&mut conn, &runner, Duration::from_secs(2), &logger).await;
     });
 
     let mut client = tokio::net::UnixStream::connect(&sock_path).await.unwrap();
@@ -377,6 +365,7 @@ struct Deps {
     home: String,
     menu_calls: Arc<Mutex<Vec<Option<String>>>>,
     clipboard_calls: Arc<Mutex<Vec<Option<String>>>>,
+    spawned_gui: Arc<Mutex<Vec<Vec<String>>>>,
 }
 
 impl SyncDeps for Deps {
@@ -404,6 +393,9 @@ impl SyncDeps for Deps {
     fn run_clipboard(&self, action: Option<&str>) {
         self.clipboard_calls.lock().unwrap().push(action.map(|action| action.to_string()));
     }
+    fn spawn_gui(&self, args: &[String]) {
+        self.spawned_gui.lock().unwrap().push(args.to_vec());
+    }
 }
 
 const CTL: &str = "/sys/devices/platform/ideapad_acpi/conservation_mode";
@@ -417,6 +409,7 @@ fn parity_deps(runner: ProcessFake) -> Deps {
         home: "/home/u".to_string(),
         menu_calls: Arc::new(Mutex::new(Vec::new())),
         clipboard_calls: Arc::new(Mutex::new(Vec::new())),
+        spawned_gui: Arc::new(Mutex::new(Vec::new())),
     }
 }
 
@@ -485,7 +478,7 @@ fn dispatch_no_command_short_circuits() {
         calls: Arc::new(Mutex::new(0)),
         _gc_calls: Arc::new(Mutex::new(0)),
     };
-    let outcome = dispatch(&argv(&["SwayManager"]), &runner, &FakeGui::default(), || {});
+    let outcome = dispatch(&argv(&["SwayManager"]), &runner, || {});
     assert_eq!(outcome, DispatchOutcome::NoCommand);
     assert_eq!(*runner.calls.lock().unwrap(), 0);
 }
@@ -503,7 +496,6 @@ async fn parity_sync_round_trip_over_real_server() {
         handle_connection(
             &mut conn,
             &SyncCliRunner::new(deps),
-            &FakeGui::default(),
             Duration::from_secs(2),
             &logger,
         )
@@ -534,7 +526,6 @@ async fn round_trip(args: &[String]) -> (bool, SilentOutput) {
         handle_connection(
             &mut conn,
             &SyncCliRunner::new(deps),
-            &FakeGui::default(),
             Duration::from_secs(2),
             &logger,
         )
@@ -572,7 +563,6 @@ async fn server_empty_line_closes_without_response() {
         handle_connection(
             &mut conn,
             &SyncCliRunner::new(deps),
-            &FakeGui::default(),
             Duration::from_secs(2),
             &logger,
         )
@@ -613,7 +603,6 @@ async fn serve_with_answers_one_connection() {
             sock_path,
             listener,
             SyncCliRunner::new(parity_deps(ProcessFake::new())),
-            FakeGui::default(),
             logger,
         )
         .await
@@ -659,4 +648,59 @@ async fn client_false_on_silent_socket() {
     )
     .await;
     assert!(!ok);
+}
+
+#[test]
+fn osd_volume_up_executes_before_gui_spawn() {
+    // Regressão: a ação rodava no `invoke` do frontend (~330ms depois);
+    // o daemon executa (~10ms) e a GUI só exibe (sem action = sem duplo).
+    let runner = ProcessFake::new()
+        .with_success("wpctl", &["set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+"], "")
+        .with_success("wpctl", &["get-volume", "@DEFAULT_AUDIO_SINK@"], "Volume: 0.71\n");
+    let deps = parity_deps(runner);
+    let (stdout, stderr) = handle_sync(&deps, &argv(&["SwayManager", "osd", "volume", "up"]));
+    assert_eq!((stdout.as_str(), stderr.as_str()), ("", ""));
+    let runs = deps.runner.runs();
+    assert!(
+        runs.iter().any(|c| c == &["wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+"]),
+        "wpctl executado no daemon: {runs:?}"
+    );
+    let spawned = deps.spawned_gui.lock().unwrap();
+    assert_eq!(spawned.len(), 1);
+    assert_eq!(spawned[0], vec!["SwayManager", "osd", "volume"], "GUI display-only: {spawned:?}");
+}
+
+#[test]
+fn wallpaper_get_prints_without_spawning() {
+    // Regressão: `wallpaper get` abria o picker (desvio por nome) em
+    // vez de imprimir; e o standalone imprimia `get /tmp` (`args[2..]`).
+    let deps = parity_deps(ProcessFake::new());
+    let (stdout, stderr) = handle_sync(&deps, &argv(&["SwayManager", "wallpaper", "get", "/tmp"]));
+    assert_eq!(stdout, "/tmp\n");
+    assert!(stderr.is_empty());
+    assert!(deps.spawned_gui.lock().unwrap().is_empty(), "get não spawna");
+
+    let deps = parity_deps(ProcessFake::new());
+    let (stdout, _) = handle_sync(&deps, &argv(&["SwayManager", "wallpaper", "/fotos"]));
+    assert!(stdout.is_empty());
+    assert_eq!(deps.spawned_gui.lock().unwrap().len(), 1, "picker spawna");
+}
+
+#[tokio::test]
+async fn wallpaper_get_round_trip_returns_folder() {
+    // Pareado socket: o stdout do `get` volta na resposta (sync),
+    // não some no ack interativo.
+    let (ok, output) = round_trip(&argv(&["SwayManager", "wallpaper", "get", "/tmp"])).await;
+    assert!(ok);
+    assert_eq!(output.stdout, "/tmp\n");
+}
+
+#[test]
+fn lock_executes_in_process_without_spawning() {
+    // Regressão: `lock` spawnava `SwayManagerGUI lock` (rota inexistente
+    // → exit 1); paridade Python executa o swaylock no daemon.
+    let deps = parity_deps(ProcessFake::new());
+    let (stdout, stderr) = handle_sync(&deps, &argv(&["SwayManager", "lock"]));
+    assert_eq!((stdout.as_str(), stderr.as_str()), ("", ""));
+    assert!(deps.spawned_gui.lock().unwrap().is_empty(), "lock não spawna");
 }

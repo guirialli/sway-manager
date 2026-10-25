@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<!-- OSD SwayManager: 300x56, frameless, auto-close 1.2s.
+     Paridade src/presentation/gui/components/base_osd.py (QTimer.singleShot 1200)
+     + volume_osd.py (🔇 mudo / 🎧 som) + brightness_osd.py (🌕). -->
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<style>
+  :root, [data-theme="dark"] {
+    --window-bg: #0D0B14;
+    --osd-bg: rgba(13, 11, 20, 235);
+    --osd-border: rgba(199, 125, 255, 0.4);
+    --text-primary: #F8F7FF;
+    --text-secondary: #B8B3D0;
+    --progress-bg: rgba(157, 78, 221, 0.2);
+    --progress-chunk: #C77DFF;
+  }
+  [data-theme="light"] {
+    --window-bg: #F5F5F7;
+    --osd-bg: rgba(240, 240, 245, 220);
+    --osd-border: rgba(0, 0, 0, 0.12);
+    --text-primary: #000000;
+    --text-secondary: #636366;
+    --progress-bg: rgba(0, 0, 0, 0.1);
+    --progress-chunk: #007AFF;
+  }
+  html, body { margin: 0; padding: 0; background: var(--window-bg); }
+  html { height: 100%; }
+  body {
+    background: var(--window-bg); color: var(--text-primary);
+    font-family: -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    width: 100vw; height: 100vh; box-sizing: border-box; margin: 0;
+  }
+  /* Piso de 200px do WebKitGTK (sem compositing, sem transparência real):
+     layout vertical usa a altura toda em vez de fingir um pill fino. */
+  #pill {
+    background: var(--osd-bg); border: 1px solid var(--osd-border); border-radius: 16px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; padding: 20px 24px; width: 252px; height: 160px; box-sizing: border-box;
+  }
+  #icon { font-size: 40px; line-height: 1; }
+  .bar { width: 100%; height: 10px; border-radius: 5px; background: var(--progress-bg); }
+  .bar > div { height: 100%; border-radius: 5px; background: var(--progress-chunk); transition: width 0.1s; }
+  .label { font-size: 20px; font-weight: bold; color: var(--text-primary); }
+</style>
+</head>
+<body>
+  <div id="pill">
+    <span id="icon">🔊</span>
+    <div class="bar"><div id="fill" style="width: 55%"></div></div>
+    <span class="label" id="value">55%</span>
+  </div>
+<script>
+  // Contrato invoke: snake_case (volume_osd/volumeOsd→volume_osd,
+  // brightness_osd). Sem bundler: usa global `__TAURI__.core.invoke`
+  // (withGlobalTauri:true).
+  const tauriInvoke = (cmd, args) =>
+    (window.__TAURI__ && window.__TAURI__.core
+      ? window.__TAURI__.core.invoke(cmd, args)
+      : Promise.reject(new Error("tauri indisponível")));
+
+  function render(percent, icon) {
+    document.getElementById("fill").style.width = percent + "%";
+    document.getElementById("value").textContent = percent + "%";
+    document.getElementById("icon").textContent = icon;
+  }
+
+  // Ícones com paridade Qt: volume 🔇 mudo / 🎧 som, brilho 🌕.
+  function volumeIcon(state) {
+    return state.is_muted ? "🔇" : "🎧";
+  }
+
+  async function showVolume(action) {
+    const state = await tauriInvoke("volume_osd", { action });
+    const pct = Math.round(state.percentage);
+    render(pct, volumeIcon(state));
+  }
+
+  async function showBrightness(action) {
+    const percent = await tauriInvoke("brightness_osd", { action });
+    render(percent, "🌕");
+  }
+
+  // Ação via query string: osd.html?kind=volume&action=up
+  // ou osd.html?kind=brightness&action=down. Auto-close 1.2s (base_osd.py).
+  // Singleton: presses seguintes chegam via evento `osd-update` (mesmo
+  // kind) — atualiza in-place e reseta o timer, sem recriar a janela.
+  (function init() {
+    const q = new URLSearchParams(location.search);
+    const kind = q.get("kind") || "volume";
+    const action = q.get("action") || "unknown";
+    const job = kind === "brightness" ? showBrightness(action) : showVolume(action);
+    job.catch(() => {});
+    let closeTimer = null;
+    const armClose = () => {
+      if (closeTimer) clearTimeout(closeTimer);
+      closeTimer = setTimeout(() => tauriInvoke("osd_close", {}).catch(() => window.close()), 1200);
+    };
+    armClose();
+    const applyUpdate = (payload) => {
+      if (kind === "brightness") {
+        render(payload, "🌕");
+      } else {
+        render(Math.round(payload.percentage), volumeIcon(payload));
+      }
+      armClose();
+    };
+    if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
+      window.__TAURI__.event.listen("osd-update", (event) => applyUpdate(event.payload)).catch(() => {});
+    }
+  })();
+</script>
+</body>
+</html>

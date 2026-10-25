@@ -1,13 +1,16 @@
 //! Crash-safe command dispatch.
 //!
 //! Mirrors `SwayManagerDaemon._safe_dispatch_command` and
-//! `CliServerHandler.handle_cli_command`: GUI commands are delegated to
-//! the isolated GUI spawner, synchronous commands run through the
+//! `CliServerHandler.handle_cli_command`: every command runs through the
 //! injected CLI runner with exceptions captured (never crashing the
-//! daemon), and `perform_gc` runs in `finally` position.
+//! daemon), and `perform_gc` runs in `finally` position. GUI routing
+//! lives INSIDE the runner (`handle_sync` decides per-command whether to
+//! spawn `SwayManagerGUI`, print, or execute) — never as a detour here:
+//! a name-only detour cannot see sync subcommands (`wallpaper get`
+//! prints; it must not spawn the picker) nor run fast-paths (the OSD
+//! action executes in the daemon before the display-only GUI spawns).
 
-use crate::commands::{command_name, is_gui_command};
-use crate::gui::GuiSpawner;
+use crate::commands::command_name;
 
 /// Synchronous CLI execution boundary (Python `CLIHandlers` today).
 ///
@@ -25,33 +28,24 @@ pub trait CliRunner {
 pub enum DispatchOutcome {
     /// No `args[1]`; Python returns early without touching handlers.
     NoCommand,
-    /// Routed to the isolated GUI subprocess (Python returns early too).
-    GuiSpawned,
     /// Synchronous CLI ran; carries captured output.
     CliExecuted { stdout: String, stderr: String },
 }
 
 /// Dispatch one request's argv without ever propagating a failure.
 ///
-/// GUI commands spawn and return; CLI errors are swallowed after
-/// logging (mirrors `except Exception: pass` in `_safe_dispatch_command`
-/// once `CliServerHandler` already logged). `on_gc` models the
-/// `finally: self.perform_gc()` hook; callers pass the real GC there.
-pub fn dispatch<R, G, F>(args: &[String], runner: &R, gui: &G, mut on_gc: F) -> DispatchOutcome
+/// CLI errors are swallowed after logging (mirrors `except Exception:
+/// pass` in `_safe_dispatch_command` once `CliServerHandler` already
+/// logged). `on_gc` models the `finally: self.perform_gc()` hook;
+/// callers pass the real GC there.
+pub fn dispatch<R, F>(args: &[String], runner: &R, mut on_gc: F) -> DispatchOutcome
 where
     R: CliRunner,
-    G: GuiSpawner,
     F: FnMut(),
 {
-    let Some(cmd) = command_name(args) else {
+    let Some(_cmd) = command_name(args) else {
         return DispatchOutcome::NoCommand;
     };
-
-    if is_gui_command(&cmd) {
-        gui.spawn_gui(args);
-        on_gc();
-        return DispatchOutcome::GuiSpawned;
-    }
 
     let outcome = match runner.run_cli(args) {
         Ok((stdout, stderr)) => DispatchOutcome::CliExecuted { stdout, stderr },

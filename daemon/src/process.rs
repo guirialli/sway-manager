@@ -107,15 +107,18 @@ impl CommandRunner for SystemRunner {
 
     fn spawn_detached(&self, program: &str, args: &[&str]) {
         use std::os::unix::process::CommandExt as _;
-        let result = std::process::Command::new(program)
+        match std::process::Command::new(program)
             .args(args)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .process_group(0)
-            .spawn();
-        if let Err(err) = result {
-            eprintln!("Erro ao iniciar processo isolado '{program}': {err}");
+            .spawn()
+        {
+            // Park instead of dropping: an un-reaped Child becomes a
+            // zombie (`Z`) that lives as long as the daemon.
+            Ok(child) => crate::reaper::park(child),
+            Err(err) => eprintln!("Erro ao iniciar processo isolado '{program}': {err}"),
         }
     }
 
@@ -141,6 +144,7 @@ impl CommandRunner for SystemRunner {
 pub struct FakeRunner {
     outputs: Arc<Mutex<HashMap<String, CmdOutput>>>,
     spawned: Arc<Mutex<Vec<Vec<String>>>>,
+    runs: Arc<Mutex<Vec<Vec<String>>>>,
     paths: Arc<Mutex<HashMap<String, Option<String>>>>,
     inputs: Arc<Mutex<HashMap<String, Vec<String>>>>,
 }
@@ -192,6 +196,11 @@ impl FakeRunner {
         self.spawned.lock().unwrap().clone()
     }
 
+    /// Every `run` argv, in call order.
+    pub fn runs(&self) -> Vec<Vec<String>> {
+        self.runs.lock().unwrap().clone()
+    }
+
     /// Payloads piped to `program` via `run_with_input`, in call order.
     pub fn piped_inputs(&self, program: &str, args: &[&str]) -> Vec<String> {
         self.inputs.lock().unwrap().get(&Self::key(program, args)).cloned().unwrap_or_default()
@@ -200,6 +209,9 @@ impl FakeRunner {
 
 impl CommandRunner for FakeRunner {
     fn run(&self, program: &str, args: &[&str]) -> CmdOutput {
+        let mut cmd = vec![program.to_string()];
+        cmd.extend(args.iter().map(|arg| arg.to_string()));
+        self.runs.lock().unwrap().push(cmd);
         self.outputs
             .lock()
             .unwrap()

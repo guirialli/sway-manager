@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<!-- ConfigCenter SwayManager (920x620, sidebar 230px, 6 páginas).
+     Paridade src/presentation/gui/windows/config_center.py: sidebar 6 itens →
+     QStackedWidget 6 páginas, .appleCard, .primaryButton, rótulos PT-BR
+     idênticos. Backend: config_center.rs. Fase 2: invoke() c/ camelCase→snake_case. -->
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<style>
+  :root, [data-theme="dark"] {
+    color-scheme: dark;
+    --window-bg: #0D0B14;
+    --sidebar-bg: #13111C;
+    --card-bg: #191624;
+    --card-border: rgba(157, 78, 221, 0.25);
+    --text-primary: #F8F7FF;
+    --text-secondary: #B8B3D0;
+    --text-muted: #7A7596;
+    --accent: #9D4EDD;
+    --accent-hover: #C77DFF;
+    --accent-text: #FFFFFF;
+    --input-bg: #14121F;
+    --input-border: rgba(157, 78, 221, 0.35);
+    --select-bg: #1E1A2E;
+    --select-text: #FFFFFF;
+    --button-bg: rgba(157, 78, 221, 0.12);
+    --button-hover: rgba(157, 78, 221, 0.25);
+    --button-border: rgba(199, 125, 255, 0.3);
+    --selection-bg: #7B2CBF;
+    --scrollbar: rgba(157, 78, 221, 0.4);
+    --scrollbar-hover: rgba(199, 125, 255, 0.7);
+    --sidebar-active: #9D4EDD;
+  }
+  [data-theme="light"] {
+    color-scheme: light;
+    --window-bg: #F5F5F7;
+    --sidebar-bg: #E8E8ED;
+    --card-bg: #FFFFFF;
+    --card-border: rgba(0, 0, 0, 0.08);
+    --text-primary: #000000;
+    --text-secondary: #636366;
+    --text-muted: #8E8E93;
+    --accent: #007AFF;
+    --accent-hover: #0062CC;
+    --accent-text: #FFFFFF;
+    --input-bg: #FFFFFF;
+    --input-border: rgba(0, 0, 0, 0.15);
+    --select-bg: #FFFFFF;
+    --select-text: #000000;
+    --button-bg: rgba(0, 0, 0, 0.04);
+    --button-hover: rgba(0, 0, 0, 0.08);
+    --button-border: rgba(0, 0, 0, 0.1);
+    --selection-bg: #007AFF;
+    --scrollbar: rgba(0, 0, 0, 0.2);
+    --scrollbar-hover: rgba(0, 0, 0, 0.35);
+    --sidebar-active: #007AFF;
+  }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--window-bg); color: var(--text-primary);
+    font-family: -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+    width: 100vw; height: 100vh; min-width: 640px; min-height: 440px;
+    box-sizing: border-box; display: flex; overflow: hidden;
+  }
+  #sidebar {
+    width: clamp(180px, 25%, 260px); flex: none; background: var(--sidebar-bg);
+    padding: 16px 12px; box-sizing: border-box;
+    display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
+  }
+  #sidebar h1 { font-size: 16px; font-weight: 700; margin: 0; padding-left: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #sidebar nav { display: flex; flex-direction: column; gap: 4px; }
+  #sidebar button {
+    background: transparent; border: 0; color: var(--text-secondary);
+    font: inherit; font-size: 14px; text-align: left; padding: 8px 10px;
+    border-radius: 8px; cursor: pointer;
+  }
+  #sidebar button.active { background: var(--sidebar-active); color: var(--accent-text); }
+  #sidebar button:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent-hover); outline-offset: 1px;
+  }
+  #pages { flex: 1; overflow-y: auto; padding: 20px 24px; box-sizing: border-box; }
+  #pages::-webkit-scrollbar { width: 8px; }
+  #pages::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 4px; }
+  #pages::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
+  .page { display: none; flex-direction: column; gap: 16px; }
+  .page.active { display: flex; }
+  .page > h2 { margin: 0; font-size: 20px; font-weight: 700; }
+  .appleCard {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .appleCard h3 { margin: 0; font-size: 13px; font-weight: 600; }
+  .appleCard p.sub { margin: 0; font-size: 12px; color: var(--text-muted); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .spacer { flex: 1; }
+  button.action {
+    background: var(--button-bg); border: 1px solid var(--button-border);
+    color: var(--text-primary); border-radius: 8px; padding: 8px 14px;
+    font: inherit; font-size: 13px; cursor: pointer;
+  }
+  button.action:hover { background: var(--button-hover); }
+  button.primaryButton {
+    background: var(--accent); border: 0; color: var(--accent-text);
+    border-radius: 8px; padding: 8px 16px; font: inherit; font-size: 13px;
+    font-weight: 600; cursor: pointer;
+  }
+  button.primaryButton:hover { background: var(--accent-hover); }
+  button.mode {
+    flex: 1; background: var(--button-bg); border: 1px solid var(--button-border);
+    color: var(--text-primary); border-radius: 10px; padding: 12px 6px;
+    font: inherit; font-size: 13px; cursor: pointer; white-space: pre-line; min-height: 70px;
+  }
+  button.mode:hover { background: var(--button-hover); }
+  button.mode.active { border: 2px solid var(--accent-hover); background: var(--selection-bg); color: var(--accent-text); }
+  .muted { font-size: 12px; color: var(--text-muted); }
+  .status-ok { font-size: 13px; font-weight: 600; color: #34C759; }
+  .status-err { font-size: 13px; font-weight: 600; color: #FF453A; }
+  label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-secondary); flex: 1 1 200px; min-width: 180px; }
+  select {
+    -webkit-appearance: none; appearance: none;
+    background-color: var(--select-bg);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' stroke='%23B8B3D0' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");
+    background-repeat: no-repeat; background-position: right 10px center;
+    border: 1px solid var(--input-border);
+    color: var(--select-text); border-radius: 8px; padding: 6px 28px 6px 10px; font: inherit;
+  }
+  select option, select optgroup {
+    background-color: var(--select-bg); color: var(--select-text);
+  }
+  input[type="text"], input[type="number"] {
+    background: var(--input-bg); border: 1px solid var(--input-border);
+    color: var(--text-primary); border-radius: 8px; padding: 6px 10px; font: inherit;
+  }
+  select:focus, input:focus { border-color: var(--accent); outline: none; }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; overflow-y: auto; max-height: 46vh; min-height: 160px; padding: 4px 2px; scrollbar-width: thin; }
+  #grid::-webkit-scrollbar { width: 8px; }
+  #grid::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 4px; }
+  /* Header/footer fixos: grudam nas bordas se a página rolar. */
+  .wpCard { position: relative; }
+  .wpHead { position: sticky; top: 0; z-index: 2; background: var(--card-bg); padding: 4px 0; }
+  .wpFoot { position: sticky; bottom: 0; z-index: 2; background: var(--card-bg); padding: 4px 0; }
+  #grid button.thumb {
+    width: 100%; max-width: 260px; background: transparent; border: 1px solid transparent;
+    border-radius: 10px; padding: 0; cursor: pointer; color: var(--text-primary); font: inherit;
+  }
+  #grid img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; border: 1px solid var(--card-border); background: var(--card-bg); display: block; margin: 0 auto; }
+  #grid button.thumb.selected { background: var(--selection-bg); border: 2px solid var(--accent-hover); }
+  #grid span { display: block; max-width: 100%; margin: 4px auto 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #preview {
+    background: #1e1e2e; border: 1px solid #313244; border-radius: 8px;
+    padding: 12px 16px; color: #cdd6f4; font-size: 12px;
+    display: flex; flex-direction: column; gap: 8px; min-height: 120px;
+  }
+  #preview .top { display: flex; justify-content: space-between; color: #a6adc8; font-size: 11px; font-weight: 600; }
+  #preview .login {
+    align-self: center; background: rgba(30, 30, 46, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px;
+    padding: 10px 12px; min-width: 240px;
+  }
+  #previewAvatar { font-size: 13px; font-weight: 700; color: #ffffff; }
+  #previewPass {
+    background: rgba(0, 0, 0, 0.3); color: #888; border-radius: 4px;
+    padding: 4px; font-size: 10px; margin-top: 6px;
+  }
+  #previewSession { font-size: 10px; color: #a6adc8; margin-top: 6px; }
+  .check { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+  /* Telas médias: sidebar compacta, paddings menores. */
+  @media (max-width: 760px) {
+    #sidebar { padding: 12px 8px; gap: 8px; }
+    #sidebar h1 { font-size: 14px; }
+    #sidebar button { font-size: 12px; padding: 7px 8px; }
+    #pages { padding: 14px 16px; }
+    .page > h2 { font-size: 17px; }
+    button.mode { min-height: 56px; font-size: 12px; }
+  }
+  /* Telas estreitas: sidebar vira barra de ícones, tudo empilha. */
+  @media (max-width: 560px) {
+    body { flex-direction: column; }
+    #sidebar { width: 100%; flex-direction: row; align-items: center; padding: 8px 10px; }
+    #sidebar h1 { display: none; }
+    #sidebar nav { flex-direction: row; flex: 1; overflow-x: auto; gap: 6px; }
+    #sidebar button { font-size: 12px; padding: 6px 8px; white-space: nowrap; }
+    #pages { padding: 12px; }
+    .appleCard { padding: 10px 12px; }
+  }
+</style>
+</head>
+<body>
+  <aside id="sidebar">
+    <h1>SwayManager</h1>
+    <nav id="nav" aria-label="Seções"></nav>
+  </aside>
+  <main id="pages">
+    <!-- Página 0: Monitores & Telas -->
+    <section class="page" data-page="0">
+      <h2>Monitores &amp; Telas</h2>
+      <div class="appleCard">
+        <h3>📸 Capturas de Tela (Screenshots)</h3>
+        <p class="sub">Configuração do diretório onde as capturas de tela serão salvas.</p>
+        <div class="row"><span class="muted" id="screenshotFolder">Pasta: …</span><span class="spacer"></span>
+        <button class="action" id="btnScreenshotFolder">📁 Escolher Pasta</button></div>
+      </div>
+      <div class="appleCard" id="layoutCard" hidden>
+        <h3>🖥️ Layout de Monitores</h3>
+        <p class="sub">Selecione o modo de exibição para seus múltiplos monitores.</p>
+        <div class="row" id="modes"></div>
+      </div>
+    </section>
+    <!-- Página 1: Papel de Parede -->
+    <section class="page" data-page="1">
+      <h2>Papel de Parede</h2>
+      <div class="appleCard wpCard">
+        <h3>Biblioteca de Imagens</h3>
+        <div class="row wpHead"><span class="muted" id="wallpaperFolder">Pasta: …</span><span class="spacer"></span>
+        <button class="action" id="btnWallpaperFolder">📁 Escolher Pasta</button></div>
+        <div id="grid" role="listbox" aria-label="Wallpapers"></div>
+        <div class="row wpFoot"><span class="muted" id="wallpaperStatus"></span><span class="spacer"></span>
+        <button class="primaryButton" id="btnApplyWallpaper">✨ Aplicar Papel de Parede</button></div>
+      </div>
+    </section>
+    <!-- Página 2: Aparência & Tema -->
+    <section class="page" data-page="2">
+      <h2>Aparência &amp; Tema</h2>
+      <div class="appleCard">
+        <h3>Tema do Sistema (GTK, Qt &amp; Terminal)</h3>
+        <p class="sub">Alterne instantaneamente a aparência entre os modos Escuro e Claro do sistema.</p>
+        <div class="row"><strong id="currentTheme">Tema Atual: …</strong><span class="spacer"></span>
+        <button class="primaryButton" id="btnToggleTheme">🌓 Alternar Tema (Dark / Light)</button></div>
+      </div>
+      <div class="appleCard">
+        <h3>Personalização de Aparência (GTK, Ícones, Cursor e Fonte)</h3>
+        <p class="sub">Selecione o tema GTK, tema de ícones, tema do cursor e fonte do sistema entre as opções instaladas.</p>
+        <div class="row">
+          <label class="field">Tema GTK:<select id="selGtk"></select></label>
+          <label class="field">Tema de Ícones:<select id="selIcon"></select></label>
+        </div>
+        <div class="row">
+          <label class="field">Tema do Cursor:<select id="selCursor"></select></label>
+          <label class="field">Fonte do Sistema:<select id="selFont"></select></label>
+        </div>
+        <div class="row"><span id="appearanceStatus"></span><span class="spacer"></span>
+        <button class="primaryButton" id="btnApplyAppearance">✨ Aplicar Aparência</button></div>
+      </div>
+    </section>
+    <!-- Página 3: Bateria & Energia -->
+    <section class="page" data-page="3">
+      <h2>Bateria &amp; Energia</h2>
+      <div class="appleCard">
+        <h3>Modo de Conservação da Bateria</h3>
+        <p class="sub">Limita a carga máxima em ~80% para preservar a vida útil da bateria.</p>
+        <div class="row"><span class="muted" id="batteryState">…</span><span class="spacer"></span>
+        <button class="action" id="btnBattery">🔋 Alternar Limite de Carga (80% vs 100%)</button></div>
+      </div>
+      <div class="appleCard">
+        <h3>Perfil de Desempenho</h3>
+        <p class="sub">Ajuste o comportamento do processador para priorizar economia de energia ou velocidade.</p>
+        <div class="row"><span class="muted" id="powerProfile">…</span><span class="spacer"></span>
+          <button class="action" data-profile="-s">🌱 Economia</button>
+          <button class="action" data-profile="-b">⚖️ Equilibrado</button>
+          <button class="action" data-profile="-p">⚡ Desempenho</button></div>
+      </div>
+    </section>
+    <!-- Página 4: Suspensão & Idle -->
+    <section class="page" data-page="4">
+      <h2>Suspensão &amp; Idle</h2>
+      <div class="appleCard">
+        <h3>Inibidor de Suspensão Automática (Swayidle)</h3>
+        <p class="sub">Impede que o sistema entre em suspensão ou desligue a tela automaticamente.</p>
+        <div class="row"><span class="muted" id="idleState">…</span><span class="spacer"></span>
+        <button class="action" id="btnIdle">☕ Alternar Inibidor (Ativo / Inativo)</button></div>
+      </div>
+    </section>
+    <!-- Página 5: Login & LightDM (paridade create_lightdm_page: 6 cards + actions) -->
+    <section class="page" data-page="5">
+      <h2>Login &amp; LightDM</h2>
+      <div class="appleCard">
+        <h3>Pré-visualização ao Vivo do Greeter</h3>
+        <div id="preview">
+          <div class="top"><span>🖥️ sway-desktop</span><span id="previewClock">…</span></div>
+          <div class="login">
+            <div id="previewAvatar">👤 <span id="previewUser">…</span></div>
+            <div id="previewPass">••••••••••••</div>
+            <div id="previewSession">Sessão: sway</div>
+          </div>
+        </div>
+      </div>
+      <div class="appleCard">
+        <h3>Plano de Fundo da Tela de Login</h3>
+        <div class="row"><span class="muted" id="lightdmBg">Imagem Atual: …</span></div>
+        <div class="row">
+          <button class="action" id="btnLightdmBg">📁 Escolher Imagem</button>
+          <button class="action" id="btnLightdmSwayWp">✨ Usar Wallpaper Atual do Sway</button>
+        </div>
+      </div>
+      <div class="appleCard">
+        <h3>Login Automático &amp; Sessão do Sistema (lightdm.conf)</h3>
+        <p class="sub">Configurações gerais do servidor LightDM, autologin e permissões de sessão.</p>
+        <label class="check"><input type="checkbox" id="chkAutologin"> Ativar Login Automático sem pedir Senha</label>
+        <div class="row">
+          <label class="field">Usuário do Autologin:<select id="selAutologinUser"></select></label>
+          <label class="field">Tempo de Espera Autologin:<span class="row"><input type="number" id="numAutologinTimeout" min="0" max="300" value="0"><span class="muted">seg</span></span></label>
+        </div>
+        <div class="row">
+          <label class="field">Sessão do Autologin:<select id="selAutologinSession"></select></label>
+          <label class="field">Sessão Padrão do Usuário:<select id="selUserSession"></select></label>
+        </div>
+        <label class="check"><input type="checkbox" id="chkManualLogin"> Permitir digitação manual de nome de usuário (greeter-show-manual-login)</label>
+        <label class="check"><input type="checkbox" id="chkHideUsers"> Ocultar lista de usuários no login (greeter-hide-users)</label>
+        <label class="check"><input type="checkbox" id="chkAllowGuest"> Permitir conta de convidado / Guest (allow-guest)</label>
+      </div>
+      <div class="appleCard">
+        <h3>Estilo e Aparência do Greeter (lightdm-gtk-greeter.conf)</h3>
+        <p class="sub">Configure o tema GTK, tema de ícones, cursor, fonte e renderização Xft.</p>
+        <div class="row">
+          <label class="field">Tema GTK:<select id="selGreeterGtk"></select></label>
+          <label class="field">Tema de Ícones:<select id="selGreeterIcon"></select></label>
+        </div>
+        <div class="row">
+          <label class="field">Tema do Cursor:<select id="selGreeterCursor"></select></label>
+          <label class="field">Tamanho do Cursor:<select id="selGreeterCursorSize"></select></label>
+        </div>
+        <div class="row">
+          <label class="field">Fonte:<select id="selGreeterFont"></select></label>
+        </div>
+        <label class="check"><input type="checkbox" id="chkXftAntialias"> Ativar Suavização de Fontes (xft-antialias)</label>
+        <div class="row">
+          <label class="field">Resolução DPI (Xft):<input type="text" id="txtXftDpi" placeholder="Padrão do Sistema (ex: 96)"></label>
+        </div>
+        <div class="row">
+          <label class="field">Estilo de Hinting (Xft):<select id="selXftHint"></select></label>
+          <label class="field">Renderização Subpixel (RGBA):<select id="selXftRgba"></select></label>
+        </div>
+        <div class="row"><span class="spacer"></span>
+        <button class="action" id="btnSyncAppearance">✨ Sincronizar Aparência com Sway/Sistema</button></div>
+      </div>
+      <div class="appleCard">
+        <h3>Relógio, Posição e Indicadores do Painel</h3>
+        <div class="row">
+          <label class="field">Formato do Relógio:<input type="text" id="txtClockFormat"></label>
+          <label class="field">Posição da Janela de Login:<select id="selPosition"></select></label>
+        </div>
+        <div class="row">
+          <label class="field">Monitor Ativo:<input type="text" id="txtActiveMonitor"></label>
+          <label class="field">Timeout de Descanso de Tela:<span class="row"><input type="number" id="numScreensaver" min="0" max="3600" value="60"><span class="muted">seg</span></span></label>
+        </div>
+        <div class="row">
+          <label class="field">Indicadores do Painel Superior:<input type="text" id="txtIndicators"></label>
+        </div>
+      </div>
+      <div class="appleCard">
+        <h3>Opções de Exibição de Fundo e Avatares</h3>
+        <label class="check"><input type="checkbox" id="chkUserBg"> Carregar wallpaper individual do usuário (draw-user-backgrounds)</label>
+        <label class="check"><input type="checkbox" id="chkDrawGrid"> Desenhar grade sobreposta no plano de fundo (draw-grid)</label>
+        <label class="check"><input type="checkbox" id="chkHideUserImg"> Ocultar foto do usuário na tela de login (hide-user-image)</label>
+        <div class="row">
+          <label class="field">Avatar Padrão do Usuário:<span class="row"><input type="text" id="txtAvatar" placeholder="Caminho para avatar padrão (ex: /usr/share/pixmaps/avatar.png)"><button class="action" id="btnAvatar">📁 Escolher</button></span></label>
+        </div>
+      </div>
+      <div class="row"><span id="lightdmStatus"></span><span class="spacer"></span>
+      <button class="primaryButton" id="btnSaveLightdm">💾 Salvar Configurações no LightDM</button></div>
+    </section>
+  </main>
+<script>
+  // Contratos (invoke camelCase → backend snake_case): monitors_page,
+  // monitors_apply(mode), monitors_set_screenshot_folder(folder),
+  // wallpaper_page, wallpaper_apply(path), wallpaper_set_folder(folder),
+  // appearance_page, appearance_apply(settings), theme_toggle,
+  // power_page, battery_toggle, power_apply(flag), idle_page,
+  // idle_toggle(flag), lightdm_page, lightdm_save(settings).
+  const tauriInvoke = (cmd, args) =>
+    (window.__TAURI__ && window.__TAURI__.core
+      ? window.__TAURI__.core.invoke(cmd, args)
+      : Promise.reject(new Error("tauri indisponível")));
+
+  const SIDEBAR = [
+    "🖥️  Monitores", "🖼️  Papel de Parede", "🌓  Aparência & Tema",
+    "🔋  Bateria & Energia", "☕  Suspensão & Idle", "🚦  Login & LightDM",
+  ];
+  const MODES = [
+    ["pcOnly", "💻\n\nApenas Notebook"], ["monitorOnly", "🖥️\n\nApenas Monitor"],
+    ["extend", "🖥️ 🖥️\n\nEstender Telas"], ["duplicate", "🖥️ = 🖥️\n\nDuplicar Telas"],
+  ];
+
+  const nav = document.getElementById("nav");
+  const pages = [...document.querySelectorAll(".page")];
+  const switchPage = (index) => {
+    if (index < 0 || index >= pages.length) return; // paridade switch_page: fora do range = noop
+    pages.forEach((p, i) => p.classList.toggle("active", i === index));
+    [...nav.children].forEach((b, i) => b.classList.toggle("active", i === index));
+  };
+  SIDEBAR.forEach((label, i) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.addEventListener("click", () => switchPage(i));
+    nav.appendChild(b);
+  });
+  const initialPage = Number.parseInt(new URLSearchParams(location.search).get("page") ?? "0", 10);
+  switchPage(Number.isNaN(initialPage) ? 0 : initialPage);
+
+  const fill = (sel, values, current) => {
+    sel.innerHTML = "";
+    (values && values.length ? values : (current ? [current] : [])).forEach((v) => {
+      const o = document.createElement("option");
+      o.value = v; o.textContent = v;
+      if (v === current) o.selected = true;
+      sel.appendChild(o);
+    });
+  };
+
+  // Página 0.
+  tauriInvoke("monitors_page", {}).then((p) => {
+    document.getElementById("screenshotFolder").textContent = `Pasta: ${p.screenshotFolder}`;
+    if (p.count >= 2) {
+      const card = document.getElementById("layoutCard");
+      card.hidden = false;
+      const box = document.getElementById("modes");
+      MODES.forEach(([mode, label]) => {
+        const b = document.createElement("button");
+        b.className = "mode" + (mode === p.current ? " active" : "");
+        b.textContent = label;
+        b.addEventListener("click", () =>
+          tauriInvoke("monitors_apply", { mode })
+            .then(() => box.querySelectorAll(".mode").forEach((x) => x.classList.toggle("active", x === b)))
+            .catch((e) => { document.getElementById("screenshotFolder").textContent = `Erro: ${e}`; }));
+        box.appendChild(b);
+      });
+    }
+  }).catch(() => {});
+  document.getElementById("btnScreenshotFolder").addEventListener("click", () => {
+    const folder = prompt("Pasta de capturas de tela:");
+    if (folder) tauriInvoke("monitors_set_screenshot_folder", { folder })
+      .then((f) => { document.getElementById("screenshotFolder").textContent = `Pasta: ${f}`; });
+  });
+
+  // Página 1.
+  let selectedWallpaper = null;
+  tauriInvoke("wallpaper_page", {}).then((p) => {
+    document.getElementById("wallpaperFolder").textContent = `Pasta: ${p.folder}`;
+    const grid = document.getElementById("grid");
+    const trunc = (n, m = 20) => (n.length <= m ? n : `${n.slice(0, m - 3)}...`); // paridade StringUtils
+    p.images.forEach((item) => {
+      const path = item.path;
+      const name = path.split("/").pop();
+      const b = document.createElement("button");
+      b.className = "thumb" + (path === p.current ? " selected" : "");
+      b.title = name;
+      const img = document.createElement("img");
+      img.src = item.thumb; img.alt = name; img.loading = "lazy";
+      const s = document.createElement("span");
+      s.textContent = trunc(name);
+      b.append(img, s);
+      b.addEventListener("click", () => {
+        grid.querySelectorAll(".thumb").forEach((x) => x.classList.remove("selected"));
+        b.classList.add("selected");
+        selectedWallpaper = path;
+      });
+      b.addEventListener("dblclick", () => applyWallpaper(path));
+      grid.appendChild(b);
+      if (!selectedWallpaper && path === p.current) selectedWallpaper = path;
+    });
+    if (!p.images.length) document.getElementById("wallpaperStatus").textContent = "Nenhum wallpaper encontrado.";
+  }).catch(() => {});
+  const applyWallpaper = (path) => {
+    if (!path) return; // paridade aplicar_wallpaper: sem path = noop
+    tauriInvoke("wallpaper_apply", { path })
+      .then(() => { document.getElementById("wallpaperStatus").textContent = `Aplicado: ${path.split("/").pop()}`; })
+      .catch((e) => { document.getElementById("wallpaperStatus").textContent = `Erro: ${e}`; });
+  };
+  document.getElementById("btnApplyWallpaper").addEventListener("click", () => applyWallpaper(selectedWallpaper));
+  document.getElementById("btnWallpaperFolder").addEventListener("click", () => {
+    const folder = prompt("Pasta de wallpapers:");
+    if (folder) tauriInvoke("wallpaper_set_folder", { folder })
+      .then((f) => { document.getElementById("wallpaperFolder").textContent = `Pasta: ${f}`; });
+  });
+
+  // Página 2.
+  tauriInvoke("appearance_page", {}).then((p) => {
+    document.getElementById("currentTheme").textContent = `Tema Atual: ${p.currentTheme.toUpperCase()}`;
+    fill(document.getElementById("selGtk"), p.options.gtkThemes, p.settings.gtkTheme);
+    fill(document.getElementById("selIcon"), p.options.iconThemes, p.settings.iconTheme);
+    fill(document.getElementById("selCursor"), p.options.cursorThemes, p.settings.cursorTheme);
+    fill(document.getElementById("selFont"), p.options.fonts, p.settings.fontName);
+  }).catch(() => {});
+  document.getElementById("btnToggleTheme").addEventListener("click", () =>
+    tauriInvoke("theme_toggle", {}).then((t) => {
+      document.getElementById("currentTheme").textContent = `Tema Atual: ${t.replace("Trocando para o tema ", "").toUpperCase()}`;
+    }));
+  document.getElementById("btnApplyAppearance").addEventListener("click", () => {
+    const val = (id) => document.getElementById(id).value;
+    const settings = { gtkTheme: val("selGtk"), iconTheme: val("selIcon"), cursorTheme: val("selCursor"), fontName: val("selFont") };
+    tauriInvoke("appearance_apply", { settings }).then((ok) => {
+      const el = document.getElementById("appearanceStatus");
+      el.textContent = ok ? "✅ Aparência atualizada com sucesso!" : "❌ Erro ao aplicar configurações de aparência.";
+      el.className = ok ? "status-ok" : "status-err";
+    });
+  });
+
+  // Página 3.
+  tauriInvoke("power_page", {}).then((p) => {
+    document.getElementById("batteryState").textContent =
+      p.supported ? (p.conservationOn ? "Conservação: LIGADO (~80%)" : "Conservação: DESLIGADO (100%)") : "Conservação não suportada";
+    document.getElementById("powerProfile").textContent = `Perfil: ${p.profileLabel} (${p.activeProfile})`;
+  }).catch(() => {});
+  document.getElementById("btnBattery").addEventListener("click", () =>
+    tauriInvoke("battery_toggle", {}).then((r) => {
+      document.getElementById("batteryState").textContent = r.message;
+    }));
+  document.querySelectorAll("[data-profile]").forEach((b) => b.addEventListener("click", () =>
+    tauriInvoke("power_apply", { flag: b.dataset.profile }).then((msg) => {
+      document.getElementById("powerProfile").textContent = msg;
+    })));
+
+  // Página 4.
+  const refreshIdle = () => tauriInvoke("idle_page", {}).then((p) => {
+    document.getElementById("idleState").textContent = p.running ? "Inibidor: ATIVO" : "Inibidor: INATIVO";
+  }).catch(() => {});
+  refreshIdle();
+  document.getElementById("btnIdle").addEventListener("click", () =>
+    tauriInvoke("idle_toggle", {}).then((msg) => {
+      document.getElementById("idleState").textContent = msg;
+      refreshIdle();
+    }));
+
+  // Página 5 (paridade create_lightdm_page + salvar_config_lightdm).
+  let lightdmDefaults = {};
+  let selectedLightdmBg = null;
+  const CURSOR_SIZES = ["16", "24", "32", "48"];
+  const HINT_STYLES = ["hintslight", "hintnone", "hintmedium", "hintfull"];
+  const RGBA_STYLES = ["rgb", "none", "bgr", "vrgb", "vbgr"];
+  const POSITIONS = ["50%,center", "50%,50%", "30%,50%", "70%,50%", "50%,30%", "50%,70%"];
+  const bool = (v) => (v || "").toLowerCase() === "true";
+  const trunc = (n, m = 30) => (!n || n === "Nenhum" ? "Nenhum" : (n.length <= m ? n : `${n.slice(0, m - 3)}...`));
+  const refreshLightdmPreview = () => {
+    const user = document.getElementById("selAutologinUser").value
+      || lightdmDefaults["autologin-user"] || "Usuário";
+    document.getElementById("previewUser").textContent = user;
+    document.getElementById("previewSession").textContent =
+      `Sessão: ${document.getElementById("selUserSession").value || lightdmDefaults["user-session"] || "sway"}`;
+  };
+  tauriInvoke("lightdm_page", {}).then((p) => {
+    const s = p.settings || {};
+    lightdmDefaults = s;
+    const val = (id) => document.getElementById(id);
+    // Daemon: checks + combos + spinboxes.
+    val("chkAutologin").checked = !!s["autologin-user"];
+    fill(val("selAutologinUser"), p.users, s["autologin-user"] || p.users[0]);
+    val("selAutologinUser").disabled = !s["autologin-user"];
+    val("numAutologinTimeout").value = parseInt(s["autologin-user-timeout"] || "0", 10) || 0;
+    fill(val("selAutologinSession"), p.sessions, s["autologin-session"] || "sway");
+    fill(val("selUserSession"), p.sessions, s["user-session"] || "sway");
+    val("chkManualLogin").checked = bool(s["greeter-show-manual-login"]);
+    val("chkHideUsers").checked = bool(s["greeter-hide-users"]);
+    val("chkAllowGuest").checked = bool(s["allow-guest"]);
+    // Greeter: temas via appearance_page (fallback: valor atual).
+    tauriInvoke("appearance_page", {}).then((a) => {
+      fill(val("selGreeterGtk"), a.options.gtkThemes, s["theme-name"] || "Adwaita-dark");
+      fill(val("selGreeterIcon"), a.options.iconThemes, s["icon-theme-name"] || "Adwaita");
+      fill(val("selGreeterCursor"), a.options.cursorThemes, s["cursor-theme-name"] || "Bibata-Modern-Ice");
+      fill(val("selGreeterFont"), a.options.fonts, s["font-name"] || "Sans 11");
+    }).catch(() => {
+      fill(val("selGreeterGtk"), [s["theme-name"]], s["theme-name"]);
+      fill(val("selGreeterIcon"), [s["icon-theme-name"]], s["icon-theme-name"]);
+      fill(val("selGreeterCursor"), [s["cursor-theme-name"]], s["cursor-theme-name"]);
+      fill(val("selGreeterFont"), [s["font-name"]], s["font-name"]);
+    });
+    fill(val("selGreeterCursorSize"), CURSOR_SIZES, s["cursor-theme-size"] || "24");
+    val("chkXftAntialias").checked = s["xft-antialias"] !== "false";
+    val("txtXftDpi").value = s["xft-dpi"] || "";
+    fill(val("selXftHint"), HINT_STYLES, s["xft-hintstyle"] || "hintslight");
+    fill(val("selXftRgba"), RGBA_STYLES, s["xft-rgba"] || "rgb");
+    // Relógio/posição/indicadores.
+    val("txtClockFormat").value = s["clock-format"] || "%a, %d %b %H:%M";
+    fill(val("selPosition"), POSITIONS.includes(s["position"]) ? POSITIONS : [...POSITIONS, s["position"]], s["position"] || "50%,center");
+    val("txtActiveMonitor").value = s["active-monitor"] || "#cursor";
+    val("numScreensaver").value = parseInt(s["screensaver-timeout"] || "60", 10) || 0;
+    val("txtIndicators").value = s["indicators"] || "~host;~spacer;~clock;~spacer;~session;~language;~a11y;~power";
+    // Exibição/avatares.
+    val("chkUserBg").checked = bool(s["draw-user-backgrounds"]);
+    val("chkDrawGrid").checked = bool(s["draw-grid"]);
+    val("chkHideUserImg").checked = bool(s["hide-user-image"]);
+    val("txtAvatar").value = s["default-user-image"] || "";
+    // Background + preview.
+    val("lightdmBg").textContent = `Imagem Atual: ${trunc((s["background"] || "Nenhum").split("/").pop())}`;
+    val("previewClock").textContent = new Date().toLocaleString("pt-BR", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+    refreshLightdmPreview();
+  }).catch(() => {});
+  document.getElementById("chkAutologin").addEventListener("change", (e) => {
+    document.getElementById("selAutologinUser").disabled = !e.target.checked;
+  });
+  document.getElementById("selAutologinUser").addEventListener("change", refreshLightdmPreview);
+  document.getElementById("selUserSession").addEventListener("change", refreshLightdmPreview);
+  document.getElementById("txtClockFormat").addEventListener("input", refreshLightdmPreview);
+  document.getElementById("btnLightdmBg").addEventListener("click", () => {
+    const bg = prompt("Selecionar Imagem de Fundo para o LightDM:");
+    if (bg) {
+      selectedLightdmBg = bg;
+      document.getElementById("lightdmBg").textContent = `Selecionada: ${trunc(bg.split("/").pop())}`;
+    }
+  });
+  document.getElementById("btnLightdmSwayWp").addEventListener("click", () => {
+    tauriInvoke("wallpaper_page", {}).then((p) => {
+      const el = document.getElementById("lightdmStatus");
+      if (p.current) {
+        selectedLightdmBg = p.current;
+        document.getElementById("lightdmBg").textContent = `Selecionada (Sway): ${trunc(p.current.split("/").pop(), 25)}`;
+        el.textContent = `Wallpaper do Sway selecionado: ${trunc(p.current.split("/").pop(), 25)}`;
+        el.className = "status-ok";
+      } else {
+        el.textContent = "Nenhum wallpaper atual do Sway foi encontrado.";
+        el.className = "status-err";
+      }
+    });
+  });
+  document.getElementById("btnAvatar").addEventListener("click", () => {
+    const path = prompt("Selecionar Avatar Padrão para o LightDM:");
+    if (path) document.getElementById("txtAvatar").value = path;
+  });
+  document.getElementById("btnSyncAppearance").addEventListener("click", () => {
+    tauriInvoke("appearance_page", {}).then((a) => {
+      const set = (id, v) => { if (v) document.getElementById(id).value = v; };
+      set("selGreeterGtk", a.settings.gtkTheme);
+      set("selGreeterIcon", a.settings.iconTheme);
+      set("selGreeterCursor", a.settings.cursorTheme);
+      set("selGreeterFont", a.settings.fontName);
+      return tauriInvoke("wallpaper_page", {});
+    }).then((p) => {
+      if (p && p.current) {
+        selectedLightdmBg = p.current;
+        document.getElementById("lightdmBg").textContent = `Selecionada (Sway): ${trunc(p.current.split("/").pop(), 25)}`;
+      }
+      const el = document.getElementById("lightdmStatus");
+      el.textContent = "Tema, ícones, cursor, fonte e wallpaper do Sway sincronizados no formulário!";
+      el.className = "status-ok";
+    });
+  });
+  document.getElementById("btnSaveLightdm").addEventListener("click", () => {
+    const v = (id) => document.getElementById(id).value.trim();
+    const c = (id) => document.getElementById(id).checked;
+    const settings = {
+      "theme-name": v("selGreeterGtk"),
+      "icon-theme-name": v("selGreeterIcon"),
+      "cursor-theme-name": v("selGreeterCursor"),
+      "cursor-theme-size": v("selGreeterCursorSize"),
+      "font-name": v("selGreeterFont"),
+      "xft-antialias": c("chkXftAntialias") ? "true" : "false",
+      "xft-dpi": v("txtXftDpi"),
+      "xft-hintstyle": v("selXftHint"),
+      "xft-rgba": v("selXftRgba"),
+      "clock-format": v("txtClockFormat"),
+      "position": v("selPosition"),
+      "active-monitor": v("txtActiveMonitor"),
+      "screensaver-timeout": String(parseInt(v("numScreensaver"), 10) || 0),
+      "indicators": v("txtIndicators"),
+      "draw-user-backgrounds": c("chkUserBg") ? "true" : "false",
+      "draw-grid": c("chkDrawGrid") ? "true" : "false",
+      "hide-user-image": c("chkHideUserImg") ? "true" : "false",
+      "default-user-image": v("txtAvatar"),
+      "autologin-user": c("chkAutologin") ? v("selAutologinUser") : "",
+      "autologin-user-timeout": String(parseInt(v("numAutologinTimeout"), 10) || 0),
+      "autologin-session": v("selAutologinSession"),
+      "user-session": v("selUserSession"),
+      "greeter-show-manual-login": c("chkManualLogin") ? "true" : "false",
+      "greeter-hide-users": c("chkHideUsers") ? "true" : "false",
+      "allow-guest": c("chkAllowGuest") ? "true" : "false",
+    };
+    if (!selectedLightdmBg) {
+      settings["background"] = lightdmDefaults["background"] || "/etc/lightdm/background.jpg";
+    }
+    tauriInvoke("lightdm_save", { settings, imageSource: selectedLightdmBg }).then((ok) => {
+      const el = document.getElementById("lightdmStatus");
+      el.textContent = ok ? "Configurações salvas no LightDM com sucesso!" : "Erro ao salvar (operação cancelada ou falha).";
+      el.className = ok ? "status-ok" : "status-err";
+      if (ok) {
+        selectedLightdmBg = null;
+        tauriInvoke("lightdm_page", {}).then((p) => {
+          lightdmDefaults = p.settings;
+          document.getElementById("lightdmBg").textContent = `Imagem Atual: ${trunc((p.settings["background"] || "Nenhum").split("/").pop())}`;
+        });
+      }
+    });
+  });
+</script>
+</body>
+</html>

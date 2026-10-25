@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<!-- WallpaperPicker SwayManager: grade 880x560, thumbs 216x122.
+     Paridade src/presentation/gui/windows/wallpaper_picker.py +
+     components/image_list.py: grid IconMode c/ truncamento, duplo-clique/Enter
+     aplica + fecha, Escape fecha. Backend: mon_wall.rs (wallpaper_list/apply). -->
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<style>
+  :root, [data-theme="dark"] {
+    --window-bg: #0D0B14;
+    --card-bg: #191624;
+    --card-border: rgba(157, 78, 221, 0.25);
+    --text-primary: #F8F7FF;
+    --text-secondary: #B8B3D0;
+    --accent: #9D4EDD;
+    --accent-hover: #C77DFF;
+    --selection-bg: #7B2CBF;
+    --scrollbar: rgba(157, 78, 221, 0.4);
+    --scrollbar-hover: rgba(199, 125, 255, 0.7);
+  }
+  [data-theme="light"] {
+    --window-bg: #F5F5F7;
+    --card-bg: #FFFFFF;
+    --card-border: rgba(0, 0, 0, 0.08);
+    --text-primary: #000000;
+    --text-secondary: #636366;
+    --accent: #007AFF;
+    --accent-hover: #0062CC;
+    --selection-bg: #007AFF;
+    --scrollbar: rgba(0, 0, 0, 0.2);
+    --scrollbar-hover: rgba(0, 0, 0, 0.35);
+  }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--window-bg); color: var(--text-primary);
+    font-family: -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+    width: 100vw; height: 100vh; min-width: 560px; min-height: 400px;
+    box-sizing: border-box; padding: 20px;
+    display: flex; flex-direction: column; gap: 15px;
+  }
+  h1 { margin: 0; font-size: 18px; font-weight: bold; }
+  #grid {
+    flex: 1; overflow-y: auto; display: grid; gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); justify-content: start;
+    align-content: start; outline: none; scrollbar-width: thin;
+  }
+  #grid::-webkit-scrollbar { width: 8px; }
+  #grid::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 4px; }
+  #grid::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
+  .thumb {
+    width: 100%; max-width: 260px; background: transparent; border: 1px solid transparent;
+    border-radius: 10px; padding: 0; cursor: pointer; color: var(--text-primary);
+    font: inherit; text-align: center;
+  }
+  .thumb img {
+    width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px;
+    border: 1px solid var(--card-border); background: var(--card-bg); display: block;
+    margin: 0 auto;
+  }
+  .thumb.selected { background: var(--selection-bg); border: 2px solid var(--accent-hover); }
+  .thumb span {
+    display: block; max-width: 100%; margin: 4px auto 0; font-size: 13px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #status { color: var(--text-secondary); font-size: 13px; min-height: 18px; }
+</style>
+</head>
+<body>
+  <h1>🖼️ Galeria de Wallpapers</h1>
+  <div id="grid" tabindex="0" role="listbox" aria-label="Wallpapers"></div>
+  <div id="status" role="status"></div>
+<script>
+  const tauriInvoke = (cmd, args) =>
+    (window.__TAURI__ && window.__TAURI__.core
+      ? window.__TAURI__.core.invoke(cmd, args)
+      : Promise.reject(new Error("tauri indisponível")));
+
+  const grid = document.getElementById("grid");
+  const status = document.getElementById("status");
+  let selected = null;
+
+  const truncate = (name, maxLen = 20) =>
+    // Paridade StringUtils.truncar_nome_arquivo.
+    (name.length <= maxLen ? name : `${name.slice(0, maxLen - 3)}...`);
+
+  const select = (btn) => {
+    if (selected) selected.classList.remove("selected");
+    selected = btn;
+    btn.classList.add("selected");
+    btn.focus();
+  };
+
+  const apply = (path) => {
+    // Paridade aplicar_wallpaper: sem path → noop; sucesso → backend fecha.
+    if (!path) return;
+    status.textContent = "Aplicando...";
+    tauriInvoke("wallpaper_apply_and_close", { path })
+      .catch((e) => { status.textContent = `Erro ao aplicar wallpaper: ${e}`; });
+  };
+
+  const addThumb = (item) => {
+    const path = item.path;
+    const name = path.split("/").pop();
+    const btn = document.createElement("button");
+    btn.className = "thumb";
+    btn.title = name;
+    btn.dataset.path = path;
+    btn.setAttribute("role", "option");
+    const img = document.createElement("img");
+    img.src = item.thumb;
+    img.alt = name;
+    img.loading = "lazy";
+    const label = document.createElement("span");
+    label.textContent = truncate(name);
+    btn.append(img, label);
+    btn.addEventListener("click", () => select(btn));
+    btn.addEventListener("dblclick", () => apply(path));
+    btn.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") apply(path);
+    });
+    grid.appendChild(btn);
+    if (!selected) select(btn);
+  };
+
+  const dir = new URLSearchParams(location.search).get("dir") || "";
+  const listCall = dir
+    ? tauriInvoke("wallpaper_list", { dir })
+    : tauriInvoke("wallpaper_default_folder", {})
+        .then((folder) => tauriInvoke("wallpaper_list", { dir: folder }));
+
+  listCall
+    .then((paths) => {
+      paths.forEach(addThumb);
+      status.textContent = paths.length
+        ? `${paths.length} wallpapers`
+        : "Nenhum wallpaper encontrado.";
+    })
+    .catch((e) => { status.textContent = `Erro ao listar: ${e}`; });
+
+  grid.addEventListener("keydown", (e) => {
+    // Paridade ListaImagens.keyPressEvent: Enter aplica, Escape fecha.
+    if (e.key === "Enter" && selected) apply(selected.dataset.path);
+    else if (e.key === "Escape") window.close();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") window.close();
+  });
+</script>
+</body>
+</html>

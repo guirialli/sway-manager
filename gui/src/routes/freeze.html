@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<!-- Freeze SwayManager: overlay fullscreen por monitor p/ seleção de área.
+     Paridade: `SingleScreenOverlayWindow` (máscara `rgba(0,0,0,115)`, retângulo
+     `#007AFF` 2px, tag `rgba(28,28,32,230)` com `"<w> × <h> px"`) + Esc/botão
+     direito cancela, mínimo 6px. Boot: `freeze_screens` → `grim -o` por output
+     (`freeze_capture`) → compõe o recorte no canvas → `screenshot_save_png`. -->
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<style>
+  :root, [data-theme="dark"] {
+    --freeze-mask: rgba(0, 0, 0, 0.45);
+    --freeze-tag: rgba(28, 28, 32, 0.9);
+    --freeze-rect: #007AFF;
+    --text-primary: #F8F7FF;
+  }
+  [data-theme="light"] {
+    --freeze-mask: rgba(0, 0, 0, 0.45);
+    --freeze-tag: rgba(28, 28, 32, 0.9);
+    --freeze-rect: #007AFF;
+    --text-primary: #000000;
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+  body {
+    cursor: crosshair;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+  }
+  #frozen { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: fill; }
+  #scrim { position: fixed; inset: 0; background: var(--freeze-mask); }
+  #selection {
+    position: fixed; display: none;
+    border: 2px solid var(--freeze-rect);
+    box-sizing: border-box;
+  }
+  #tag {
+    position: fixed; display: none;
+    background: var(--freeze-tag); color: #FFFFFF;
+    font-size: 12px; padding: 4px 8px; border-radius: 4px;
+    white-space: nowrap; pointer-events: none;
+  }
+  #out { display: none; }
+</style>
+</head>
+<body>
+  <img id="frozen" alt="">
+  <div id="scrim"></div>
+  <div id="selection"></div>
+  <div id="tag"></div>
+  <canvas id="out"></canvas>
+<script>
+  // Estado espelha `SelectionState`: início/atual em coords lógicas, `abs + 1`.
+  const MIN_SELECTION_SIZE = 6;
+  const invoke = window.__TAURI__.core.invoke.bind(window.__TAURI__.core);
+  const frozen = document.getElementById('frozen');
+  const scrim = document.getElementById('scrim');
+  const selection = document.getElementById('selection');
+  const tag = document.getElementById('tag');
+  const out = document.getElementById('out');
+  const drag = { start: null, current: null, screens: [], output: null, origin: { x: 0, y: 0 } };
+  const params = new URLSearchParams(location.search);
+
+  function normalized() {
+    if (!drag.start || !drag.current) return null;
+    const x = Math.min(drag.start.x, drag.current.x);
+    const y = Math.min(drag.start.y, drag.current.y);
+    const w = Math.abs(drag.current.x - drag.start.x) + 1;
+    const h = Math.abs(drag.current.y - drag.start.y) + 1;
+    return { x, y, w, h };
+  }
+
+  function paint() {
+    const rect = normalized();
+    if (!rect) {
+      selection.style.display = 'none';
+      tag.style.display = 'none';
+      scrim.style.clipPath = 'none';
+      return;
+    }
+    // Coordenadas locais desta janela = globais − origem do output.
+    const lx = rect.x - drag.origin.x;
+    const ly = rect.y - drag.origin.y;
+    selection.style.display = 'block';
+    selection.style.left = lx + 'px';
+    selection.style.top = ly + 'px';
+    selection.style.width = rect.w + 'px';
+    selection.style.height = rect.h + 'px';
+    // Recorta a máscara só sobre o retângulo (paridade `fillRect` ×4 do Qt).
+    scrim.style.clipPath = `polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, ` +
+      `${lx}px ${ly}px, ${lx}px ${ly + rect.h}px, ` +
+      `${lx + rect.w}px ${ly + rect.h}px, ${lx + rect.w}px ${ly}px, ` +
+      `${lx}px ${ly}px)`;
+    tag.style.display = 'block';
+    tag.textContent = `${rect.w} × ${rect.h} px`;
+    let tagY = ly - tag.offsetHeight - 6;
+    if (tagY < 0) tagY = ly + 6;
+    tag.style.left = lx + 'px';
+    tag.style.top = tagY + 'px';
+  }
+
+  // Posição lógica global = origem do output + posição local (paridade `mapToGlobal`).
+  function globalPos(event) {
+    return { x: drag.origin.x + event.clientX, y: drag.origin.y + event.clientY };
+  }
+
+  async function cancel() {
+    drag.start = null;
+    drag.current = null;
+    try { await invoke('freeze_cancel'); } catch (_) { /* noop */ }
+    window.close();
+  }
+
+  // Composição 100% no backend (`screenshot_compose_save`): envia o rect
+  // global + telas (com `image` = path do grim); o Rust recorta em pixels
+  // nativos (HiDPI correto, cross-output funciona) e salva.
+  async function confirm(rect) {
+    const screens = drag.screens.map((s) => ({
+      ...s,
+      image: s.image ?? `/tmp/sway-manager-freeze-${s.name}.png`,
+    }));
+    try {
+      await invoke('screenshot_compose_save', {
+        selection: rect,
+        screens,
+        folder: params.get('folder') ?? null,
+      });
+    } catch (err) {
+      console.error('screenshot_compose_save falhou:', err);
+    }
+    // Fecha o APP todo (não só esta janela): paridade Qt.
+    try { await invoke('freeze_cancel'); } catch (_) { window.close(); }
+  }
+
+  document.addEventListener('mousedown', (event) => {
+    if (event.button === 2) { cancel(); return; }
+    if (event.button !== 0) return;
+    const pos = globalPos(event);
+    drag.start = pos;
+    drag.current = pos;
+    paint();
+  });
+  document.addEventListener('mousemove', (event) => {
+    if (!drag.start) return;
+    drag.current = globalPos(event);
+    paint();
+  });
+  document.addEventListener('mouseup', async (event) => {
+    if (event.button !== 0 || !drag.start) return;
+    drag.current = globalPos(event);
+    const rect = normalized();
+    drag.start = null;
+    if (!rect || rect.w < MIN_SELECTION_SIZE || rect.h < MIN_SELECTION_SIZE) {
+      await cancel();
+      return;
+    }
+    await confirm(rect);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') cancel();
+  });
+  document.addEventListener('contextmenu', (event) => event.preventDefault());
+
+  // Boot: telas reais → LÊ o PNG pré-capturado pelo main (`prefreeze_all_outputs`).
+  // O frontend NUNCA chama `grim` aqui: com janelas abertas, um overlay
+  // fotografaria o outro (transparente = preto).
+  (async function boot() {
+    try {
+      drag.screens = await invoke('freeze_screens');
+    } catch (_) {
+      drag.screens = [];
+    }
+    const want = params.get('output');
+    const screen = drag.screens.find((s) => s.name === want) ?? drag.screens[0];
+    if (!screen) {
+      await cancel();
+      return;
+    }
+    drag.output = screen.name;
+    drag.origin = { x: screen.geometry.x, y: screen.geometry.y };
+    const dst = `/tmp/sway-manager-freeze-${screen.name}.png`;
+    try {
+      frozen.src = await invoke('freeze_image_data', { path: dst });
+    } catch (err) {
+      console.error('freeze_image_data falhou:', err);
+    }
+    paint();
+  })();
+</script>
+</body>
+</html>

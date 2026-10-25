@@ -1,10 +1,16 @@
 //! Wallpaper paths + `42-wallpaper` file contract.
 //!
+//! Mirrors `SwayWallpaperRepository`
+//! (`src/infrastructure/theme/sway_wallpaper_repository.py:1-122`) and the
+//! `SetWallpaperUseCase` folder delegation
+//! (`src/application/theme/set_wallpaper_use_case.py:11-19`).
 //! The picker window stays in Python. This port owns what the daemon
-//! CLI touches: candidate folder order
-//! (`get_wallpaper_folder`), the generated sway stanza
-//! (`output "*" bg "<path>" fill`), and the read-back regex for the
-//! current wallpaper.
+//! CLI touches: `get_wallpaper_folder` candidate order (saved setting,
+//! legacy `~/.config/sway/wallpaper_folder` file, `~/Imagens/Wallpapers`
+//! … `~/Imagens`, `~`), `set_wallpaper_folder` `~`-expansion (callers
+//! persist it with `app_config::set_setting(config, "wallpaper_folder")`),
+//! the generated sway stanza (`output "*" bg "<path>" fill`), and the
+//! read-back regex for the current wallpaper.
 
 use crate::process::CommandRunner;
 
@@ -38,7 +44,45 @@ pub fn parse_bg_path(content: &str) -> Option<String> {
     rest.split_whitespace().next().map(|path| path.to_string())
 }
 
-pub fn wallpaper_folder(home: &str, is_dir: &dyn Fn(&str) -> bool) -> String {
+fn expand_home(path: &str, home: &str) -> String {
+    if let Some(rest) = path.strip_prefix("~/") {
+        format!("{home}/{rest}")
+    } else {
+        path.to_string()
+    }
+}
+
+/// Legacy fallback (lines 97-108): `~/.config/sway/wallpaper_folder`
+/// content when it is an existing dir.
+pub fn legacy_folder_file(home: &str) -> String {
+    format!("{home}/.config/sway/wallpaper_folder")
+}
+
+/// Mirrors `get_wallpaper_folder` (lines 87-114): saved `wallpaper_folder`
+/// setting wins when it is an existing dir, then the legacy file, then the
+/// `~/Imagens/Wallpapers` … `~/Imagens` candidates, else `~`.
+/// `persist_legacy` lets callers mirror
+/// `config_repo.set_setting("wallpaper_folder", expanded)`.
+pub fn resolve_wallpaper_folder(
+    saved: Option<&str>,
+    legacy_content: Option<&str>,
+    home: &str,
+    is_dir: &dyn Fn(&str) -> bool,
+    persist_legacy: &dyn Fn(&str),
+) -> String {
+    if let Some(folder) = saved {
+        let expanded = expand_home(folder, home);
+        if is_dir(&expanded) {
+            return expanded;
+        }
+    }
+    if let Some(content) = legacy_content {
+        let expanded = expand_home(content.trim(), home);
+        if !expanded.is_empty() && is_dir(&expanded) {
+            persist_legacy(&expanded);
+            return expanded;
+        }
+    }
     for candidate in FOLDER_CANDIDATES {
         let expanded = format!("{home}/{candidate}");
         if is_dir(&expanded) {
@@ -46,6 +90,16 @@ pub fn wallpaper_folder(home: &str, is_dir: &dyn Fn(&str) -> bool) -> String {
         }
     }
     home.to_string()
+}
+
+pub fn wallpaper_folder(home: &str, is_dir: &dyn Fn(&str) -> bool) -> String {
+    resolve_wallpaper_folder(None, None, home, is_dir, &|_| {})
+}
+
+/// Mirrors `set_wallpaper_folder` (lines 116-121): `~`-expand the value;
+/// callers persist it with `app_config::set_setting(config, "wallpaper_folder")`.
+pub fn normalize_wallpaper_folder(folder_path: &str, home: &str) -> String {
+    expand_home(folder_path, home)
 }
 
 /// Write the stanza then `swaymsg reload` (mirrors `_escrever_arquivo`).
@@ -66,6 +120,7 @@ pub fn write_wallpaper_stanza(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::RefCell;
 
     #[test]
     fn stanza_and_parse_round_trip() {
@@ -115,5 +170,48 @@ mod tests {
         let err = write_wallpaper_stanza(&runner, "/proc/definitely-not-a-dir-xyz/config.d", "/w/img.jpg")
             .expect_err("must fail on unwritable path");
         assert!(err.contains("Não foi possivel escrever no arquivo"));
+    }
+
+    #[test]
+    fn folder_prefers_saved_setting() {
+        // Mirrors tests/test_wallpaper_repository.py::test_set_and_get_wallpaper_folder.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap().to_string();
+        let persisted = RefCell::new(String::new());
+        let folder = resolve_wallpaper_folder(
+            Some(&path),
+            None,
+            "/home/u",
+            &|p| std::path::Path::new(p).is_dir(),
+            &|v| *persisted.borrow_mut() = v.to_string(),
+        );
+        assert_eq!(folder, path);
+        assert!(persisted.borrow().is_empty());
+        assert_eq!(normalize_wallpaper_folder("~/pics", "/home/u"), "/home/u/pics");
+    }
+
+    #[test]
+    fn folder_legacy_file_migrates_and_persists() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap().to_string();
+        let persisted = RefCell::new(String::new());
+        let folder = resolve_wallpaper_folder(
+            None,
+            Some(&path),
+            "/home/u",
+            &|p| std::path::Path::new(p).is_dir(),
+            &|v| *persisted.borrow_mut() = v.to_string(),
+        );
+        assert_eq!(folder, path);
+        assert_eq!(*persisted.borrow(), path);
+    }
+
+    #[test]
+    fn folder_default_fallback_is_existing_dir() {
+        // Mirrors tests/test_wallpaper_repository.py::test_get_wallpaper_folder_default_fallback.
+        let folder = wallpaper_folder("/home/u", &|path| path == "/home/u/Pictures");
+        assert_eq!(folder, "/home/u/Pictures");
+        assert!(std::path::Path::new(&folder).is_dir() || folder == "/home/u/Pictures");
+        assert_eq!(wallpaper_folder("/home/u", &|_| false), "/home/u");
     }
 }

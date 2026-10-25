@@ -1,17 +1,17 @@
 # SwayManager
 
-**SwayManager** is a PySide6 desktop suite and CLI management tool developed for **Sway** and **SwayFX** Wayland compositors. It provides both GTK/Qt popups and CLI services for display layouts, wallpaper pickers, volume/brightness OSDs, battery conservation mode, idle lock inhibitors, theme switching, power profiles, and screenshots.
+**SwayManager** is a Rust desktop suite and CLI management tool developed for **Sway** and **SwayFX** Wayland compositors. The persistent daemon (`SwayManager`) and the GUI (`SwayManagerGUI`, Tauri v2 + WebKitGTK) provide display layouts, wallpaper pickers, volume/brightness OSDs, battery conservation mode, idle lock inhibitors, theme switching, power profiles, and screenshots.
 
 ---
 
 ## 🌟 Key Features
 
-### 🖥️ Graphical Popups (Qt / PySide6)
+### 🖥️ Graphical Windows (Tauri v2)
 - **Control Center (`SwayManager settings`)**: Configurator panel with tabs for wallpapers, appearance (GTK & Qt dark/light), power/battery modes, idle inhibitors, and **LightDM greeter settings** (login wallpaper, GTK/icon themes, fonts, clock format).
 - **Monitor Display Switcher (`SwayManager monitor`)**: Multi-monitor configuration dialog to arrange, mirror, or disable displays.
 - **Wallpaper Picker (`SwayManager wallpaper [folder]`)**: Visual grid picker dialog to preview and apply wallpapers via `swaybg`.
-- **Volume OSD (`SwayManager osd volume [up|down|mute]`)**: Animated volume OSD overlay.
-- **Brightness OSD (`SwayManager osd brilho [up|down]`)**: Animated screen brightness OSD overlay.
+- **Volume OSD (`SwayManager osd volume [up|down|mute]`)**: Volume OSD overlay (singleton: rapid presses update in place).
+- **Brightness OSD (`SwayManager osd brilho [up|down]`)**: Screen brightness OSD overlay.
 
 ### ⚙️ CLI Services & Waybar Integrations
 - **Battery Conservation (`SwayManager battery [toggle|status]`)**: Toggles battery charge thresholds (~80% limit vs 100% full charge) across Lenovo IdeaPad and generic Linux sysfs attributes.
@@ -44,21 +44,19 @@
 SwayManager is integrated into the dotfiles installer `install.sh`:
 
 ```bash
-# Install SwayManager in a isolated virtual environment at ~/.config/sway/bin/
-./install.sh --sway-manager
+# Install SwayManager binaries at ~/.config/sway/bin/
+./install.sh --no-udev
 ```
 
-### Manual Installation
-1. Ensure Python 3.10+ is installed.
-2. Install Python dependencies:
+### Manual Build
+1. Ensure Rust (cargo) and Tauri Linux deps are installed:
    ```bash
-   pip install -r sway-manager/requirements.txt
+   sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
    ```
-3. Run SwayManager (daemon Rust, via build):
+2. Build daemon + GUI (runs all test suites first):
    ```bash
-   ./sway-manager/build.sh && ./sway-manager/out/main.dist/SwayManager --help
+   ./build.sh && ./out/main.dist/SwayManager --help
    ```
-   (O entrypoint Python `sway-manager/src/main.py` executa apenas localmente; o daemon é o binário Rust.)
 
 ---
 

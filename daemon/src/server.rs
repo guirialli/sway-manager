@@ -12,9 +12,8 @@ use std::time::Duration;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
-use crate::commands::{command_name, is_interactive};
+use crate::commands::{command_name, is_interactive_args};
 use crate::dispatch::{CliRunner, DispatchOutcome, dispatch};
-use crate::gui::GuiSpawner;
 use crate::handlers::{self, SyncDeps};
 use crate::logging::Logger;
 use crate::protocol::{Request, Response, decode_line, encode_line};
@@ -56,15 +55,13 @@ impl<D: SyncDeps> CliRunner for SyncCliRunner<D> {
 }
 
 /// Handle one already-accepted connection to completion.
-pub async fn handle_connection<R, G>(
+pub async fn handle_connection<R>(
     stream: &mut tokio::net::UnixStream,
     runner: &R,
-    gui: &G,
     timeout: Duration,
     logger: &Logger,
 ) where
     R: CliRunner,
-    G: GuiSpawner,
 {
     let request_line = {
         let mut reader = tokio::io::BufReader::new(&mut *stream);
@@ -97,16 +94,18 @@ pub async fn handle_connection<R, G>(
     logger.cmd(&format!("Executando comando via socket: '{cmd_str}'"));
 
     let cmd = command_name(&request.args).unwrap_or_else(|| "help".to_string());
-    if is_interactive(&cmd) && !request.args.is_empty() {
+    if is_interactive_args(&cmd, &request.args) && !request.args.is_empty() {
         // Immediate empty ack (<1ms), then deferred execution — mirrors
         // `write + flush + disconnectFromServer` + `QTimer.singleShot`.
+        // Sync subcommands (`wallpaper get`) bypass this: their stdout
+        // ships back in the response below.
         respond(stream, &Response::ack(), timeout, logger).await;
-        let outcome = dispatch(&request.args, runner, gui, runtime::perform_gc);
+        let outcome = dispatch(&request.args, runner, runtime::perform_gc);
         log_outcome(logger, &request.args, &outcome);
         return;
     }
 
-    let outcome = dispatch(&request.args, runner, gui, runtime::perform_gc);
+    let outcome = dispatch(&request.args, runner, runtime::perform_gc);
     log_outcome(logger, &request.args, &outcome);
     let response = match outcome {
         DispatchOutcome::CliExecuted { stdout, stderr } => Response {
@@ -114,7 +113,7 @@ pub async fn handle_connection<R, G>(
             stderr,
             exit_code: 0,
         },
-        DispatchOutcome::GuiSpawned | DispatchOutcome::NoCommand => Response::ack(),
+        DispatchOutcome::NoCommand => Response::ack(),
     };
     respond(stream, &response, timeout, logger).await;
 }
@@ -151,20 +150,17 @@ fn log_outcome(logger: &Logger, args: &[String], outcome: &DispatchOutcome) {
 }
 
 /// Serve forever on a bound `listener` (mirrors `start` accept phase).
-pub async fn serve_with<R, G>(
+pub async fn serve_with<R>(
     socket_path: PathBuf,
     listener: tokio::net::UnixListener,
     runner: R,
-    gui: G,
     logger: Logger,
 ) -> std::io::Result<()>
 where
     R: CliRunner + Send + Sync + 'static,
-    G: GuiSpawner + Send + Sync + 'static,
 {
     let _ = socket_path;
     let runner = Arc::new(runner);
-    let gui = Arc::new(gui);
 
     let gc_logger = logger.clone();
     tokio::spawn(async move {
@@ -181,20 +177,19 @@ where
         let Ok((mut stream, _)) = listener.accept().await else {
             continue;
         };
-        let (runner, gui, logger) = (Arc::clone(&runner), Arc::clone(&gui), logger.clone());
+        let (runner, logger) = (Arc::clone(&runner), logger.clone());
         tokio::spawn(async move {
-            handle_connection(&mut stream, &*runner, &*gui, IO_TIMEOUT, &logger).await;
+            handle_connection(&mut stream, &*runner, IO_TIMEOUT, &logger).await;
         });
     }
 }
 
 /// Serve forever on `socket_path` (mirrors `start` from bind to `exec`).
-pub async fn serve<R, G>(socket_path: PathBuf, runner: R, gui: G, logger: Logger) -> std::io::Result<()>
+pub async fn serve<R>(socket_path: PathBuf, runner: R, logger: Logger) -> std::io::Result<()>
 where
     R: CliRunner + Send + Sync + 'static,
-    G: GuiSpawner + Send + Sync + 'static,
 {
     runtime::cleanup_stale_socket(&socket_path);
     let listener = tokio::net::UnixListener::bind(&socket_path)?;
-    serve_with(socket_path, listener, runner, gui, logger).await
+    serve_with(socket_path, listener, runner, logger).await
 }

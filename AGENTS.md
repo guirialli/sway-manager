@@ -2,43 +2,45 @@
 
 ## Project Structure & Module Organization
 
-`src/` contains the Python application, organized by responsibility: `domain/`
-defines entities and repository interfaces, `application/` contains use cases,
-`infrastructure/` integrates Sway, system tools, and persistence, and
-`presentation/` contains CLI handlers and PySide6 widgets/windows. Entry points
-are `src/main.py` (local CLI) and `src/gui_main.py` (interactive GUI commands).
-The persistent daemon is Rust in `daemon/` (`sway-manager-daemon` binary);
-the Python daemon was removed — `src/main.py` executes locally only.
-Put unit tests in `tests/test_<feature>.py`. Runtime dependencies are declared in
-`requirements.txt`; `udev/` holds the battery rule.
+`daemon/` is the Rust workspace root (`sway-manager-daemon` lib + `SwayManager`
+binary): `src/repos/` holds one module per system domain (audio, portal,
+screenshot, wallpaper…), `src/handlers.rs` routes CLI argv, `src/server.rs`
+serves the Unix-socket IPC, `src/main.rs` wires CLI/daemon startup.
+`gui/src-tauri/` is the Tauri v2 GUI (`SwayManagerGUI` binary): `src/main.rs`
+routes one `WebviewWindow` per command, `src/tauri_runtime.rs` exposes
+`#[tauri::command]` wrappers over daemon repos, `capabilities/main.json`
+grants frontend permissions. `gui/src/routes/*.html` are the vanilla-JS
+frontends (no framework). `udev/` holds the battery rule.
 
 ## Build, Test, and Development Commands
 
-- `python3 -m venv venv && source venv/bin/activate` creates a local environment.
-- `pip install -r requirements.txt` installs PySide6 and runtime dependencies.
-- `PYTHONPATH=src QT_QPA_PLATFORM=offscreen venv/bin/python -m unittest discover -s tests -v` runs the Python test suite.
-- `cargo test` (in `daemon/`) runs the Rust daemon test suite.
-- `./build.sh` runs both suites and produces `out/main.dist/` with the Rust `SwayManager` and Nuitka `SwayManagerGUI`.
+- `cargo test` (in `daemon/`) runs the daemon test suite (lib + bin + integration).
+- `cargo test` (in `gui/src-tauri/`) runs the GUI test suite.
+- `cargo clippy --all-targets` must be warning-free in both crates.
+- `./build.sh` runs both suites and produces `out/main.dist/` with the Rust
+  `SwayManager` daemon and Tauri `SwayManagerGUI` GUI (`sway-manager-gui` stays
+  as install alias). It `touch`es `tauri.conf.json` so HTML/CSS/JS is re-embedded.
 - `./install.sh --no-udev` installs the build locally without changing system
   udev rules. Do not run the default installer unless system installation is
   intended.
 
 ## Coding Style & Naming Conventions
 
-Use Python 3.10+ with four-space indentation, type hints on new public code,
-and standard import grouping (stdlib, third party, local). Use `snake_case` for
-functions, variables, and modules; `PascalCase` for classes; and
-`UPPER_CASE` for constants. Keep UI code in `presentation/gui/`; keep Sway,
-`grim`, `slurp`, and filesystem calls behind infrastructure repositories. Prefer
-small explicit methods and specific exception handling over broad `except`.
+Use Rust 2024 edition, `cargo fmt` defaults. Use `snake_case` for functions,
+variables, and modules; `PascalCase` for types; `UPPER_CASE` for constants.
+Keep Sway, `wpctl`, `grim`, `slurp`, and filesystem calls behind `repos/`
+modules behind the `CommandRunner` seam (injectable `FakeRunner` in tests).
+Prefer small explicit functions, `Result`/`Option` over panics (no `unwrap`
+outside tests), and specific error values over generic strings.
 
 ## Testing Guidelines
 
-Tests use `unittest` and `unittest.mock`. Name test files `test_*.py`, test
-classes `Test<Subject>`, and test methods `test_<behavior>`. Mock external
-commands, sockets, desktop services, and system paths; do not require a live
-Sway session. For Qt image/widget tests, run headlessly with
-`QT_QPA_PLATFORM=offscreen`.
+Tests use Rust built-in `#[test]`/`#[tokio::test]` plus `tempfile` for
+filesystem isolation. Name integration files `tests/<feature>.rs`, test fns
+`test_<behavior>` or descriptive snake_case. Mock external commands via
+`FakeRunner`, sockets via tempdir Unix listeners, and never require a live
+Sway session. Every new repo/handler/command needs a regression test;
+socket-visible behavior needs a socket round-trip test.
 
 ## Commit & Pull Request Guidelines
 

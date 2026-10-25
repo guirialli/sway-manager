@@ -1,0 +1,17 @@
+{
+  "author": "guirialli",
+  "description": "Skill permanente para documentação técnica orientada à implementação. Garante que toda feature, alteração funcional, refatoração relevante ou mudança de regra de negócio produza e mantenha atualizados o README.md do domínio e especificações modulares em spec/<implementacao>/ baseadas no comportamento efetivo.",
+  "id": "guirialli/spec-create",
+  "keywords": [
+    "spec",
+    "specs",
+    "documentation",
+    "documentacao",
+    "arquitetura",
+    "regras-de-negocio",
+    "dominio"
+  ],
+  "name": "spec-create",
+  "schemaVersion": 1,
+  "version": "1.0.0"
+}

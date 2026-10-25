@@ -4,10 +4,9 @@ set -e
 echo "Compilando o projeto..."
 ./build.sh
 
-echo "Instalando o SwayManager (daemon Rust) e SwayManagerGUI (Qt)..."
+echo "Instalando o SwayManager (daemon Rust) e SwayManagerGUI (Tauri)..."
 rm -rf ~/.config/sway/bin/sway-manager
 rm -f ~/.config/sway/bin/SwayManager
-rm -f ~/.config/sway/bin/sway-manager
 rm -f ~/.config/sway/bin/SwayManagerGUI
 rm -f ~/.config/sway/bin/sway-manager-gui
 rm -f ~/.config/sway/bin/SwayManagerDaemon
@@ -15,9 +14,8 @@ rm -f ~/.config/sway/bin/SwayManagerDaemon
 mkdir -p ~/.config/sway/bin/sway-manager
 cp -rf ./out/main.dist/* ~/.config/sway/bin/sway-manager/
 
-# SwayManager = daemon Rust (cargo build --release); SwayManagerGUI = Qt (Nuitka).
+# SwayManager = daemon Rust; SwayManagerGUI = GUI Tauri (sway-manager-gui = alias).
 ln -sf $HOME/.config/sway/bin/sway-manager/SwayManager $HOME/.config/sway/bin/SwayManager
-ln -sf $HOME/.config/sway/bin/sway-manager/SwayManager $HOME/.config/sway/bin/sway-manager
 ln -sf $HOME/.config/sway/bin/sway-manager/SwayManagerGUI $HOME/.config/sway/bin/SwayManagerGUI
 ln -sf $HOME/.config/sway/bin/sway-manager/SwayManagerGUI $HOME/.config/sway/bin/sway-manager-gui
 
@@ -35,24 +33,10 @@ for arg in "$@"; do
     esac
 done
 
-PYTHON_BIN="python3"
-if [ -x "venv/bin/python3" ]; then
-    PYTHON_BIN="venv/bin/python3"
-fi
-
 echo "Configurando XDG Desktop Portal..."
-PYTHONPATH=src $PYTHON_BIN - <<'PY'
-from portal.config_installer import PortalConfigInstaller
-import sys
-
-try:
-    installer = PortalConfigInstaller()
-    log = installer.install()
-    for line in log:
-        print(f"  {line}")
-except Exception as exc:
-    print(f"Aviso: falha ao configurar portal: {exc}", file=sys.stderr)
-PY
+if ! ~/.config/sway/bin/SwayManager portal install; then
+    echo "Aviso: falha ao configurar portal (verifique o log acima)" >&2
+fi
 
 if [ "$INSTALL_UDEV" = true ]; then
     echo "Instalando regras udev para conservação de bateria (requer sudo)..."

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<!-- BrightnessPopup SwayManager: 320x60, slider 1-100.
+     Paridade src/presentation/gui/windows/brightness_popup.py:
+     valueChanged → brightnessctl contínuo; release → ddcutil no monitor
+     externo + fecha; Escape fecha. -->
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<style>
+  :root, [data-theme="dark"] {
+    --window-bg: #0D0B14;
+    --osd-bg: rgba(13, 11, 20, 235);
+    --osd-border: rgba(199, 125, 255, 0.4);
+    --text-primary: #F8F7FF;
+    --accent-hover: #C77DFF;
+  }
+  [data-theme="light"] {
+    --window-bg: #F5F5F7;
+    --osd-bg: rgba(240, 240, 245, 220);
+    --osd-border: rgba(0, 0, 0, 0.12);
+    --text-primary: #000000;
+    --accent-hover: #007AFF;
+  }
+  html, body { margin: 0; padding: 0; background: transparent; }
+  body {
+    background: var(--osd-bg); color: var(--text-primary);
+    border: 1px solid var(--osd-border); border-radius: 12px;
+    font-family: -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+    display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+    width: 288px; height: 40px;
+  }
+  #icon { font-size: 16px; background: transparent; }
+  input[type="range"] { flex: 1; accent-color: var(--accent-hover); }
+</style>
+</head>
+<body>
+  <span id="icon">☀️</span>
+  <input type="range" id="slider" min="1" max="100" value="70" aria-label="Brilho">
+<script>
+  const tauriInvoke = (cmd, args) =>
+    (window.__TAURI__ && window.__TAURI__.core
+      ? window.__TAURI__.core.invoke(cmd, args)
+      : Promise.reject(new Error("tauri indisponível")));
+
+  const slider = document.getElementById("slider");
+
+  // Percent atual (paridade BrightnessPopup.__init__: get_current).
+  tauriInvoke("brightness_popup_get", {})
+    .then((v) => { slider.value = v; })
+    .catch(() => {});
+
+  // valueChanged contínuo: só brightnessctl (sem ddcutil a cada tick).
+  // BrightnessAction é externamente taggeada c/ rename_all lowercase:
+  // Set(v) ↔ {"set": v}.
+  slider.addEventListener("input", () => {
+    tauriInvoke("brightness_osd", { action: { set: Number(slider.value) } })
+      .catch(() => {});
+  });
+
+  // release → set final + ddcutil no externo + fecha (close_app).
+  const commitAndClose = () => {
+    tauriInvoke("brightness_popup_set", { value: Number(slider.value) })
+      .catch(() => {})
+      .finally(() => window.close());
+  };
+  slider.addEventListener("change", commitAndClose);
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") window.close();
+  });
+</script>
+</body>
+</html>

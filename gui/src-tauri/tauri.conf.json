@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SwayManagerGUI",
+  "version": "0.1.0",
+  "identifier": "sway.apps.manager-gui",
+  "build": {
+    "frontendDist": "../src",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": null,
+      "assetProtocol": { "enable": true, "scope": ["/tmp/**", "$HOME/**"] }
+    },
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": false
+  }
+}

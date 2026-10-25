@@ -5,6 +5,8 @@
 //! [`CommandRunner`](crate::process::CommandRunner) seam standing in for
 //! `subprocess` and the filesystem probes abstracted for tests.
 
+pub mod appearance;
+pub mod app_config;
 pub mod audio;
 pub mod battery;
 pub mod clipboard;
@@ -14,9 +16,12 @@ pub mod display;
 pub mod icons;
 pub mod idle;
 pub mod lock;
+pub mod lightdm;
 pub mod menu;
 pub mod menu_exec;
 pub mod power;
+pub mod portal;
 pub mod screenshot;
 pub mod theme;
 pub mod wallpaper;
+pub mod wallpaper_thumbs;

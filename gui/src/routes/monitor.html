@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<!-- MonitorSwap SwayManager: 4 modos + confirmação c/ revert 15 s.
+     Paridade src/presentation/gui/windows/monitor_swap.py:
+     botões rotulados c/ interno/externo, apply → fechar + confirmar_ou_reverter;
+     erro → mensagem; Escape fecha. Backend: mon_wall.rs. -->
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<style>
+  :root, [data-theme="dark"] {
+    --window-bg: #0D0B14;
+    --card-bg: #191624;
+    --card-border: rgba(157, 78, 221, 0.25);
+    --text-primary: #F8F7FF;
+    --text-secondary: #B8B3D0;
+    --text-muted: #7A7596;
+    --accent: #9D4EDD;
+    --accent-hover: #C77DFF;
+    --accent-text: #FFFFFF;
+    --button-bg: rgba(157, 78, 221, 0.12);
+    --button-hover: rgba(157, 78, 221, 0.25);
+    --button-border: rgba(199, 125, 255, 0.3);
+  }
+  [data-theme="light"] {
+    --window-bg: #F5F5F7;
+    --card-bg: #FFFFFF;
+    --card-border: rgba(0, 0, 0, 0.08);
+    --text-primary: #000000;
+    --text-secondary: #636366;
+    --text-muted: #8E8E93;
+    --accent: #007AFF;
+    --accent-hover: #0062CC;
+    --accent-text: #FFFFFF;
+    --button-bg: rgba(0, 0, 0, 0.04);
+    --button-hover: rgba(0, 0, 0, 0.08);
+    --button-border: rgba(0, 0, 0, 0.1);
+  }
+  html, body { margin: 0; padding: 0; background: transparent; }
+  body {
+    background: var(--window-bg); color: var(--text-primary);
+    font-family: -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+    display: flex; justify-content: center; padding: 0;
+  }
+  #card {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 16px 20px 20px; margin: 0;
+    display: flex; flex-direction: column; gap: 14px; min-width: 560px;
+  }
+  h1 {
+    margin: 0; font-size: 14px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--text-muted); text-align: center;
+  }
+  #modes { display: flex; gap: 12px; }
+  .mode {
+    flex: 1; background: var(--button-bg); color: var(--text-primary);
+    border: 1px solid var(--button-border); border-radius: 10px;
+    font-size: 14px; padding: 14px 8px; cursor: pointer; white-space: pre-line;
+  }
+  .mode:hover { background: var(--button-hover); }
+  .mode.active { border: 2px solid var(--accent-hover); }
+  .mode:disabled { opacity: 0.5; cursor: default; }
+  #overlay {
+    display: none; position: fixed; inset: 0; background: transparent;
+    align-items: center; justify-content: center;
+  }
+  #confirm {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 20px 24px; text-align: center; max-width: 420px;
+  }
+  #confirm p { color: var(--text-secondary); margin: 0 0 16px; }
+  #confirm button {
+    background: var(--accent); color: var(--accent-text); border: 0;
+    border-radius: 8px; padding: 8px 18px; margin: 0 6px; cursor: pointer;
+  }
+  #confirm button.secondary { background: var(--button-bg); color: var(--text-primary); border: 1px solid var(--button-border); }
+  #error { display: none; color: var(--text-secondary); text-align: center; font-size: 13px; }
+</style>
+</head>
+<body>
+  <div id="card">
+    <h1>Disposição de Telas</h1>
+    <div id="modes">
+      <button class="mode" data-mode="pcOnly" id="btn-pc">💻</button>
+      <button class="mode" data-mode="monitorOnly" id="btn-swap">🖥️</button>
+      <button class="mode" data-mode="extend">🖥️ 🖥️&#10;&#10;Estender</button>
+      <button class="mode" data-mode="duplicate">🖥️ = 🖥️&#10;&#10;Duplicar</button>
+    </div>
+    <div id="error" role="alert"></div>
+  </div>
+  <div id="overlay">
+    <div id="confirm">
+      <p id="confirm-text"></p>
+      <button id="btn-keep">Manter</button>
+      <button class="secondary" id="btn-revert">Reverter</button>
+    </div>
+  </div>
+<script>
+  const tauriInvoke = (cmd, args) =>
+    (window.__TAURI__ && window.__TAURI__.core
+      ? window.__TAURI__.core.invoke(cmd, args)
+      : Promise.reject(new Error("tauri indisponível")));
+
+  const buttons = [...document.querySelectorAll(".mode")];
+  const errorBox = document.getElementById("error");
+  const overlay = document.getElementById("overlay");
+  const confirmText = document.getElementById("confirm-text");
+  let timeout = 15;
+  let timer = null;
+
+  // Paridade MonitorSwapWindow.initUI: rótulos c/ nomes dos monitores.
+  tauriInvoke("monitor_layouts", {})
+    .then((l) => {
+      if (l.interno) document.getElementById("btn-pc").textContent = `💻\n\n${l.interno}`;
+      if (l.externo) document.getElementById("btn-swap").textContent = `🖥️\n\n${l.externo}`;
+      buttons.forEach((b) => b.classList.toggle("active", b.dataset.mode === l.current));
+      if (l.count < 2) buttons.forEach((b) => { b.disabled = true; });
+    })
+    .catch(() => {});
+
+  const showError = (msg) => {
+    // Paridade apply_config/except: QMessageBox c/ str(e).
+    errorBox.textContent = String(msg);
+    errorBox.style.display = "block";
+  };
+
+  const stopTimer = () => { if (timer) { clearInterval(timer); timer = null; } };
+
+  const revert = () => {
+    // Paridade confirmar_ou_reverter → recarregar_sway.
+    stopTimer();
+    tauriInvoke("monitor_reload", {}).catch(() => {}).finally(() => window.close());
+  };
+
+  const startConfirm = () => {
+    // Paridade confirmar_ou_reverter: countdown 15 s; timeout → revert.
+    timeout = 15;
+    overlay.style.display = "flex";
+    const tick = () => {
+      confirmText.textContent =
+        `A configuração foi aplicada.\nVoltando ao normal em ${timeout} segundos...`;
+      if (timeout <= 0) { revert(); return; }
+      timeout -= 1;
+    };
+    tick();
+    timer = setInterval(tick, 1000);
+  };
+
+  buttons.forEach((b) => b.addEventListener("click", () => {
+    // Paridade apply_config: execute → fechar + confirmar; erro → mensagem.
+    tauriInvoke("monitor_apply", { mode: b.dataset.mode })
+      .then(startConfirm)
+      .catch(showError);
+  }));
+
+  document.getElementById("btn-keep").addEventListener("click", () => {
+    stopTimer();
+    window.close();
+  });
+  document.getElementById("btn-revert").addEventListener("click", revert);
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") window.close();
+  });
+</script>
+</body>
+</html>
