@@ -73,8 +73,19 @@
   .field select:focus-visible, .pwrow input:focus-visible, button:focus-visible, summary:focus-visible {
     outline: 2px solid var(--accent-hover); outline-offset: 2px;
   }
-  .pwrow { display: flex; gap: 8px; }
-  .pwrow input { flex: 1; min-width: 0; }
+  .pwrow { position: relative; }
+  .pwrow input { width: 100%; padding-right: 38px; }
+  #toggle {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    background: transparent; border: none; border-radius: 6px;
+    padding: 4px; cursor: pointer; color: var(--text-muted);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #toggle:hover { color: var(--accent-hover); background: var(--button-hover); }
+  #toggle svg { width: 18px; height: 18px; }
+  #toggle .eye-off { display: none; }
+  #toggle[aria-pressed="true"] .eye-open { display: none; }
+  #toggle[aria-pressed="true"] .eye-off { display: block; }
   .banner { border-radius: 8px; padding: 8px 12px; font-size: 13px; }
   .banner.info { background: var(--info-bg); border: 1px solid var(--info-border); color: var(--text-secondary); }
   .banner.error { background: var(--error-bg); border: 1px solid var(--error-border); color: var(--error-text); }
@@ -86,7 +97,6 @@
   button.action:hover { background: var(--button-hover); border-color: var(--accent); }
   button.primary { background: var(--accent); color: var(--accent-text); border: 1px solid var(--accent); }
   button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
-  #toggle { min-width: 0; padding: 8px 12px; }
   .tech { color: var(--text-muted); font-size: 12px; }
   .tech summary { cursor: pointer; }
   .tech code { display: block; margin-top: 4px; word-break: break-all; color: var(--text-secondary); }
@@ -114,7 +124,16 @@
       <label id="prompt" for="password">Senha</label>
       <div class="pwrow">
         <input type="password" id="password" autofocus autocomplete="current-password">
-        <button class="action" id="toggle" type="button" aria-pressed="false">Mostrar</button>
+        <button id="toggle" type="button" aria-pressed="false" aria-label="Mostrar senha" title="Mostrar senha">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+          <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M17.94 17.94A10.5 10.5 0 0 1 12 19c-6.5 0-10-7-10-7a17.6 17.6 0 0 1 4.06-4.94M9.9 4.24A10.5 10.5 0 0 1 12 5c6.5 0 10 7 10 7a17.7 17.7 0 0 1-2.16 3.19M14.12 14.12A3 3 0 1 1 9.88 9.88"></path>
+            <line x1="2" y1="2" x2="22" y2="22"></line>
+          </svg>
+        </button>
       </div>
     </div>
     <div class="actions">
@@ -165,8 +184,10 @@
 
   function renderEcho() {
     passwordEl.type = state.echo ? 'text' : 'password';
-    toggleEl.textContent = state.echo ? 'Ocultar' : 'Mostrar';
     toggleEl.setAttribute('aria-pressed', String(state.echo));
+    var label = state.echo ? 'Ocultar senha' : 'Mostrar senha';
+    toggleEl.setAttribute('aria-label', label);
+    toggleEl.setAttribute('title', label);
   }
 
   // Identity do argv: `unix-user:<nome>` (único kind do BE hoje) — exibe só

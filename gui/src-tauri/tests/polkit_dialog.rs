@@ -143,4 +143,9 @@ fn html_invokes_match_registered_commands() {
     // Tokens dark/light (paridade `portal.html`).
     assert!(HTML.contains("[data-theme=\"light\"]"), "light");
     assert!(HTML.contains("--window-bg"), "tokens");
+    // Toggle de visibilidade: olho SVG dentro do input (sem texto —
+    // `renderEcho` nunca usa `textContent` no botão, que destruiria o SVG).
+    assert!(HTML.contains("eye-open") && HTML.contains("eye-off"), "eye svgs");
+    assert!(HTML.contains("aria-label=\"Mostrar senha\""), "eye label");
+    assert!(!HTML.contains("toggleEl.textContent"), "no textContent on toggle");
 }
