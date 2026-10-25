@@ -54,6 +54,18 @@ pub trait CommandRunner: Send + Sync {
         let _ = input;
         self.run(program, args)
     }
+    /// Byte variant of [`CommandRunner::run_with_input`]: pipes raw `input`
+    /// (e.g. PNG bytes to `wl-copy --type image/png`) without UTF-8 loss.
+    fn run_with_bytes(&self, program: &str, args: &[&str], input: &[u8]) -> CmdOutput {
+        let _ = input;
+        self.run(program, args)
+    }
+    /// Byte variant of [`CommandRunner::run`]: captures raw stdout
+    /// (e.g. `cliphist decode <id>` for images). Returns `(status, bytes)`.
+    fn run_bytes(&self, program: &str, args: &[&str]) -> (i32, Vec<u8>) {
+        let out = self.run(program, args);
+        (out.status, out.stdout.into_bytes())
+    }
     fn spawn_detached(&self, program: &str, args: &[&str]);
     fn which(&self, binary: &str) -> Option<String>;
 }
@@ -79,6 +91,9 @@ impl CommandRunner for SystemRunner {
         }
     }
     fn run_with_input(&self, program: &str, args: &[&str], input: &str) -> CmdOutput {
+        self.run_with_bytes(program, args, input.as_bytes())
+    }
+    fn run_with_bytes(&self, program: &str, args: &[&str], input: &[u8]) -> CmdOutput {
         use std::io::Write as _;
         match std::process::Command::new(program)
             .args(args)
@@ -89,7 +104,7 @@ impl CommandRunner for SystemRunner {
         {
             Ok(mut child) => {
                 if let Some(mut stdin) = child.stdin.take() {
-                    let _ = stdin.write_all(input.as_bytes());
+                    let _ = stdin.write_all(input);
                 }
                 match child.wait_with_output() {
                     Ok(output) => CmdOutput {
@@ -101,6 +116,12 @@ impl CommandRunner for SystemRunner {
                 }
             }
             Err(err) => CmdOutput::failure(-1, String::new(), err.to_string()),
+        }
+    }
+    fn run_bytes(&self, program: &str, args: &[&str]) -> (i32, Vec<u8>) {
+        match std::process::Command::new(program).args(args).stdin(Stdio::null()).output() {
+            Ok(output) => (output.status.code().unwrap_or(-1), output.stdout),
+            Err(_) => (-1, Vec::new()),
         }
     }
 
@@ -140,13 +161,19 @@ impl CommandRunner for SystemRunner {
 /// In-memory stub; tests preregister outputs keyed by argv.
 /// `run_with_input` also records the piped stdin per argv key so tests
 /// can assert the exact wofi payload (e.g. `img:<path>:text:` icons).
+/// Preregistered `(status, stdout)` for [`CommandRunner::run_bytes`].
+type ByteOutputs = HashMap<String, (i32, Vec<u8>)>;
+/// Raw stdin payloads recorded per argv from `run_with_bytes`.
+type ByteInputs = HashMap<String, Vec<Vec<u8>>>;
 #[derive(Debug, Default, Clone)]
 pub struct FakeRunner {
     outputs: Arc<Mutex<HashMap<String, CmdOutput>>>,
+    byte_outputs: Arc<Mutex<ByteOutputs>>,
     spawned: Arc<Mutex<Vec<Vec<String>>>>,
     runs: Arc<Mutex<Vec<Vec<String>>>>,
     paths: Arc<Mutex<HashMap<String, Option<String>>>>,
     inputs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    byte_inputs: Arc<Mutex<ByteInputs>>,
 }
 impl FakeRunner {
     pub fn new() -> Self {
@@ -184,6 +211,11 @@ impl FakeRunner {
         self
     }
 
+    pub fn with_bytes(self, program: &str, args: &[&str], status: i32, bytes: Vec<u8>) -> Self {
+        self.byte_outputs.lock().unwrap().insert(Self::key(program, args), (status, bytes));
+        self
+    }
+
     pub fn with_which(self, binary: &str, path: Option<&str>) -> Self {
         self.paths
             .lock()
@@ -204,6 +236,11 @@ impl FakeRunner {
     /// Payloads piped to `program` via `run_with_input`, in call order.
     pub fn piped_inputs(&self, program: &str, args: &[&str]) -> Vec<String> {
         self.inputs.lock().unwrap().get(&Self::key(program, args)).cloned().unwrap_or_default()
+    }
+
+    /// Raw payloads piped via `run_with_bytes`, in call order.
+    pub fn piped_bytes(&self, program: &str, args: &[&str]) -> Vec<Vec<u8>> {
+        self.byte_inputs.lock().unwrap().get(&Self::key(program, args)).cloned().unwrap_or_default()
     }
 }
 
@@ -227,6 +264,26 @@ impl CommandRunner for FakeRunner {
             .or_default()
             .push(input.to_string());
         self.run(program, args)
+    }
+    fn run_with_bytes(&self, program: &str, args: &[&str], input: &[u8]) -> CmdOutput {
+        self.byte_inputs
+            .lock()
+            .unwrap()
+            .entry(Self::key(program, args))
+            .or_default()
+            .push(input.to_vec());
+        self.run(program, args)
+    }
+    fn run_bytes(&self, program: &str, args: &[&str]) -> (i32, Vec<u8>) {
+        let mut cmd = vec![program.to_string()];
+        cmd.extend(args.iter().map(|arg| arg.to_string()));
+        self.runs.lock().unwrap().push(cmd);
+        self.byte_outputs
+            .lock()
+            .unwrap()
+            .get(&Self::key(program, args))
+            .cloned()
+            .unwrap_or((1, Vec::new()))
     }
 
 

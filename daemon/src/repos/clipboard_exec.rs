@@ -68,12 +68,52 @@ impl ClipItem {
     }
 }
 
+/// Max thumbnail edge (px). Matches the legacy Python cache (`clip_*.png`).
+pub const THUMB_EDGE: u32 = 64;
+
+/// Sniff the mime type of raw image bytes via magic numbers.
+/// Returns `None` for non-image data (fail-secure: caller falls back to text).
+pub fn image_mime(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1A, b'\n']) {
+        Some("image/png")
+    } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        Some("image/jpeg")
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        Some("image/gif")
+    } else if bytes.starts_with(b"BM") {
+        Some("image/bmp")
+    } else if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && bytes[8..12] == *b"WEBP" {
+        Some("image/webp")
+    } else {
+        None
+    }
+}
+
+/// Thumbnail cache dir (`clear_history` already purges it).
+pub fn thumb_dir(home: &str) -> String {
+    format!("{home}/.cache/sway-manager/clipboard_thumbs")
+}
+
+/// Decode `bytes` to a `THUMB_EDGE` PNG thumbnail at
+/// `{thumb_dir}/clip_{id}.png`. Returns the path on success, `None` when
+/// the bytes are not a decodable image (caller shows the generic icon).
+pub fn write_thumb(home: &str, id: &str, bytes: &[u8]) -> Option<String> {
+    image_mime(bytes)?;
+    let img = image::load_from_memory(bytes).ok()?;
+    let thumb = img.thumbnail(THUMB_EDGE, THUMB_EDGE);
+    let dir = thumb_dir(home);
+    std::fs::create_dir_all(&dir).ok()?;
+    let path = format!("{dir}/clip_{id}.png");
+    thumb.save_with_format(&path, image::ImageFormat::Png).ok()?;
+    Some(path)
+}
+
 /// Mirrors `get_clipboard_items` list assembly (actions + cliphist list,
 /// favorites excluded from history to avoid duplicates).
 pub fn list_items(
     runner: &dyn CommandRunner,
     favorites: Vec<ClipItem>,
-    decode_hint: &dyn Fn(&str) -> bool,
+    thumb: &dyn Fn(&str) -> Option<String>,
 ) -> Vec<ClipItem> {
     let mut items = vec![ClipItem::action_clear(), ClipItem::action_manage_favs()];
     items.extend(favorites.clone());
@@ -97,7 +137,7 @@ pub fn list_items(
         }
         let mut item = ClipItem::history(&id, &summary);
         if item.is_image {
-            item.image_path = decode_hint(&id).then(|| format!("/tmp/clip_{id}.png"));
+            item.image_path = thumb(&id);
         }
         items.push(item);
     }
@@ -105,6 +145,8 @@ pub fn list_items(
 }
 
 /// Mirrors `copy_to_clipboard` (wl-copy variants + notify + literals).
+/// Images pipe RAW bytes via `wl-copy --type <mime>` (no UTF-8 round-trip:
+/// `from_utf8_lossy` corrupts PNG/JPEG and typeless `wl-copy` pastes as text).
 pub fn copy_item(runner: &dyn CommandRunner, item: &ClipItem, decode: &dyn Fn(&str) -> Option<Vec<u8>>) -> bool {
     if runner.which("wl-copy").is_none() {
         println!("Erro: 'wl-copy' não encontrado.");
@@ -119,7 +161,14 @@ pub fn copy_item(runner: &dyn CommandRunner, item: &ClipItem, decode: &dyn Fn(&s
         println!("Erro ao copiar para a área de transferência: sem dados");
         return false;
     };
-    let output = runner.run_with_input("wl-copy", &[], &String::from_utf8_lossy(&bytes));
+    let output = if item.is_image && !item.is_favorite {
+        match image_mime(&bytes) {
+            Some(mime) => runner.run_with_bytes("wl-copy", &["--type", mime], &bytes),
+            None => runner.run_with_input("wl-copy", &[], &String::from_utf8_lossy(&bytes)),
+        }
+    } else {
+        runner.run_with_input("wl-copy", &[], &String::from_utf8_lossy(&bytes))
+    };
     if !output.succeeded() {
         println!("Erro ao copiar para a área de transferência: {}", output.stderr.trim());
         return false;
@@ -469,10 +518,70 @@ mod tests {
             .with_which("cliphist", Some("/usr/bin/cliphist"))
             .with_success("cliphist", &["list"], "12\thello\n13\t[[ binary data image/png ]\n");
         let favs = vec![ClipItem { id: "1".to_string(), text: "hello".to_string(), raw_preview: "hello".to_string(), is_image: false, image_path: None, is_favorite: true, is_action: false, action_type: None }];
-        let items = list_items(&runner, favs, &|_| true);
+        let items = list_items(&runner, favs, &|id| Some(format!("/tmp/clip_{id}.png")));
         // 2 actions + 1 fav + 1 new (binary) item; "hello" dup skipped.
         assert_eq!(items.len(), 4);
-        assert!(items.iter().any(|item| item.is_image));
+        let img = items.iter().find(|item| item.is_image).unwrap();
+        assert_eq!(img.image_path.as_deref(), Some("/tmp/clip_13.png"));
+    }
+
+    /// 1x1 red PNG (valid magic + decodable by `image`).
+    fn red_png() -> Vec<u8> {
+        let img = image::RgbImage::from_pixel(1, 1, image::Rgb([255, 0, 0]));
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgb8(img)
+            .write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
+            .unwrap();
+        bytes
+    }
+
+    #[test]
+    fn image_mime_sniffs_magic() {
+        assert_eq!(image_mime(&red_png()), Some("image/png"));
+        assert_eq!(image_mime(&[0xFF, 0xD8, 0xFF, 0xE0]), Some("image/jpeg"));
+        assert_eq!(image_mime(b"GIF89a..."), Some("image/gif"));
+        assert_eq!(image_mime(b"BM..."), Some("image/bmp"));
+        assert_eq!(image_mime(b"RIFF\x00\x00\x00\x00WEBP"), Some("image/webp"));
+        assert_eq!(image_mime(b"plain text"), None);
+        assert_eq!(image_mime(b""), None);
+    }
+
+    #[test]
+    fn write_thumb_caches_64px_png() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().to_str().unwrap();
+        let path = write_thumb(home, "42", &red_png()).unwrap();
+        assert_eq!(path, format!("{}/.cache/sway-manager/clipboard_thumbs/clip_42.png", home));
+        let thumb = image::open(&path).unwrap();
+        assert!(thumb.width() <= THUMB_EDGE && thumb.height() <= THUMB_EDGE);
+        assert!(write_thumb(home, "43", b"not an image").is_none());
+    }
+
+    #[test]
+    fn copy_image_uses_typed_wlcopy_with_raw_bytes() {
+        let png = red_png();
+        let runner = FakeRunner::new()
+            .with_which("wl-copy", Some("/usr/bin/wl-copy"))
+            .with_success("wl-copy", &["--type", "image/png"], "")
+            .with_success("notify-send", &[], "");
+        let item = ClipItem::history("9", "[[ binary data 2 KiB png ]]");
+        assert!(item.is_image);
+        assert!(copy_item(&runner, &item, &|_| Some(png.clone())));
+        // Raw bytes (magic intact) piped via run_with_bytes, never lossy text.
+        let piped = runner.piped_bytes("wl-copy", &["--type", "image/png"]);
+        assert_eq!(piped, vec![png]);
+        assert!(runner.piped_inputs("wl-copy", &[]).is_empty());
+    }
+
+    #[test]
+    fn copy_text_keeps_untyped_wlcopy() {
+        let runner = FakeRunner::new()
+            .with_which("wl-copy", Some("/usr/bin/wl-copy"))
+            .with_success("wl-copy", &[], "")
+            .with_success("notify-send", &[], "");
+        let item = ClipItem::history("5", "hello");
+        assert!(copy_item(&runner, &item, &|_| Some(b"hello".to_vec())));
+        assert_eq!(runner.piped_inputs("wl-copy", &[]), vec!["hello".to_string()]);
     }
 
     #[test]

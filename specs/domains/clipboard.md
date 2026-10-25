@@ -49,8 +49,22 @@ sequenceDiagram
     UC->>Wofi: Present formatted list in Wofi dmenu
     Wofi-->>UC: User selects item ID
     UC->>Repo: copy_item_to_clipboard(id)
-    Repo->>Repo: cliphist decode <id> | wl-copy
+    Repo->>Repo: cliphist decode <id> | wl-copy [--type image/png]
 ```
+
+### Image pipeline (Rust port, `daemon/src/repos/clipboard_exec.rs`)
+
+- Detection: `[[ binary data` prefix in `cliphist list` → `is_image`.
+- Thumbnails: `write_thumb(home, id, bytes)` decodes raw bytes
+  (`CommandRunner::run_bytes`, no UTF-8 round-trip), sniffs mime via magic
+  (`image_mime`: PNG/JPEG/GIF/BMP/WebP), resizes to 64px (`THUMB_EDGE`) with
+  the `image` crate and caches
+  `~/.cache/sway-manager/clipboard_thumbs/clip_{id}.png`. Undecodable bytes →
+  `None` → generic copy icon. Wofi renders it via `img:<path>:text:`.
+- Copy: images pipe RAW bytes through `wl-copy --type <mime>`
+  (`run_with_bytes`); text keeps untyped `wl-copy`. Typeless/UTF-8-lossy copy
+  corrupts PNG and pastes as text — never regress this (see
+  `copy_image_uses_typed_wlcopy_with_raw_bytes`).
 
 ---
 

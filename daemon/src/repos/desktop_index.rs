@@ -50,8 +50,19 @@ fn get_bool(content: &str, key: &str) -> bool {
 fn parse_desktop_file(path: &std::path::Path, filename: &str) -> Option<MenuItem> {
     let content = std::fs::read_to_string(path).ok()?;
     let entry = content.split("[Desktop Entry]").nth(1)?;
-    let entry = &entry[..entry.find('[').unwrap_or(entry.len())];
-
+    // Group boundary: a NEW section starts with `[` at line start.
+    // Bare `find('[')` truncates at localized keys (`Comment[pt_BR]=...`),
+    // dropping every key below them (e.g. `Exec` → app vanishes).
+    let mut end = entry.len();
+    let mut offset = 0;
+    for line in entry.split_inclusive('\n') {
+        if line.trim_start().starts_with('[') {
+            end = offset;
+            break;
+        }
+        offset += line.len();
+    }
+    let entry = &entry[..end];
     if get_bool(entry, "NoDisplay") || get_bool(entry, "Hidden") {
         return None;
     }
@@ -189,6 +200,36 @@ mod tests {
         assert!(parse_desktop_file(&noexec, "noexec.desktop").is_none());
         let item = parse_desktop_file(&good, "good.desktop").unwrap();
         assert_eq!(item.exec_cmd, "good");
+    }
+
+    #[test]
+    fn localized_keys_do_not_truncate_entry() {
+        // Regressão: `Comment[pt_BR]` (colchete no MEIO da linha) truncava
+        // a entrada e derrubava o `Exec` — ZapZap sumia do menu.
+        let dir = tempfile::tempdir().unwrap();
+        let zap = dir.path().join("com.rtosta.zapzap.desktop");
+        std::fs::write(
+            &zap,
+            "[Desktop Entry]\nName=ZapZap\nComment[pt_BR]=WhatsApp Desktop\nExec=flatpak run com.rtosta.zapzap %u\nIcon=com.rtosta.zapzap\nType=Application\n",
+        )
+        .unwrap();
+        let item = parse_desktop_file(&zap, "com.rtosta.zapzap.desktop").unwrap();
+        assert_eq!(item.name, "ZapZap");
+        assert_eq!(item.exec_cmd, "flatpak run com.rtosta.zapzap");
+    }
+
+    #[test]
+    fn next_group_still_terminates_entry() {
+        // Seção real (`[` no início da linha) continua encerrando a entrada.
+        let dir = tempfile::tempdir().unwrap();
+        let multi = dir.path().join("multi.desktop");
+        std::fs::write(
+            &multi,
+            "[Desktop Entry]\nName=Multi\nExec=multi\n[Desktop Action New]\nName=Never\nExec=never\n",
+        )
+        .unwrap();
+        let item = parse_desktop_file(&multi, "multi.desktop").unwrap();
+        assert_eq!(item.exec_cmd, "multi");
     }
 
     #[test]
